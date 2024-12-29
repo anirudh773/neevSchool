@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "school_management",
-    "slug": "school_management",
+    "name": "NeevLearn",
+    "slug": "NeevLearn",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -15,7 +15,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+       "package": "com.yourdomain.myapp"
     },
     "web": {
       "bundler": "metro",
