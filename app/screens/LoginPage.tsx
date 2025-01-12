@@ -1,18 +1,27 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, SafeAreaView, ScrollView, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  Image,
+  SafeAreaView,
+  ScrollView,
+  Alert,
+} from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
 import DropDownPicker from 'react-native-dropdown-picker';
 
 const LoginPage = () => {
-
   const userRoles = [
     { id: 1, label: 'Admin', value: 'admin' },
     { id: 2, label: 'Teacher', value: 'teacher' },
     { id: 3, label: 'Student', value: 'student' },
   ];
 
-  const [loginAs, setLoginAs] = useState('Admin / Teacher / Student');
+  const [loginAs, setLoginAs] = useState(null);
   const [erpId, setErpId] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -26,32 +35,7 @@ const LoginPage = () => {
     }
 
     try {
-      router.replace('../(drawer)');
-      // const response = await fetch('https://testcode-2.onrender.com/school/login', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //     Accept: 'application/json', // Optional, helps ensure API responds with JSON
-      //   },
-      //   body: JSON.stringify({ userName: erpId, password }),
-      // });
-
-      // const data = await response.json();
-
-      // console.log('fgfgfgfsdsdsdsdsds', data)
-
-      // if (response.ok && data.token) {
-      //   // Save data securely
-      //   await SecureStore.setItemAsync('token', data.token);
-      //   await SecureStore.setItemAsync('expiryTime', data.expiryTime);
-      //   await SecureStore.setItemAsync('userName', erpId);
-      //   await SecureStore.setItemAsync('password', password); // Avoid storing passwords in real apps
-
-      //   Alert.alert('Success', 'Login successful');
-      //   router.replace('../(drawer)');
-      // } else {
-      //   Alert.alert('Error', data.message || 'Login failed');
-      // }
+      router.replace('../(tab)');
     } catch (error) {
       console.error('Login Error:', error);
       Alert.alert('Error', 'Something went wrong! Please try again later.');
@@ -65,15 +49,19 @@ const LoginPage = () => {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.contentContainer}>
+        {/* Header */}
         <View style={styles.header}>
-          <Image source={require('../../assets/images/image.png')} style={styles.logo} />
+          <Image
+            source={require('../../assets/images/image.png')}
+            style={styles.logo}
+          />
           <Text style={styles.companyName}>Neev Learn Private Limited</Text>
           <Text style={styles.location}>Gurugram</Text>
         </View>
 
+        {/* Input Section */}
         <View style={styles.inputContainer}>
-
-        <Text style={styles.loginAsLabel}>Login As</Text>
+          <Text style={styles.loginAsLabel}>Login As</Text>
           <DropDownPicker
             open={openDropdown}
             value={loginAs}
@@ -82,17 +70,22 @@ const LoginPage = () => {
             setValue={setLoginAs}
             style={styles.dropdown}
             textStyle={styles.dropdownText}
+            placeholder="Select Role"
+            placeholderStyle={{ color: '#888' }}
+            dropDownContainerStyle={styles.dropdownContainer}
           />
 
           <TextInput
             style={styles.input}
             placeholder="ERP Login ID"
+            placeholderTextColor="#aaa"
             value={erpId}
             onChangeText={setErpId}
           />
           <TextInput
             style={styles.input}
             placeholder="ERP Password"
+            placeholderTextColor="#aaa"
             secureTextEntry={!showPassword}
             value={password}
             onChangeText={setPassword}
@@ -102,6 +95,7 @@ const LoginPage = () => {
           </TouchableOpacity>
         </View>
 
+        {/* Buttons */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
             <Text style={styles.buttonText}>Login</Text>
@@ -111,6 +105,7 @@ const LoginPage = () => {
           </TouchableOpacity>
         </View>
 
+        {/* Footer */}
         <Text style={styles.footerText}>Unable to login?</Text>
       </ScrollView>
     </SafeAreaView>
@@ -120,7 +115,7 @@ const LoginPage = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#E3F2FD', // Light blue background
   },
   contentContainer: {
     flexGrow: 1,
@@ -129,43 +124,69 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   header: {
-    flexDirection: 'column',
     alignItems: 'center',
     marginBottom: 20,
-    backgroundColor: '#E8F1FF',
+    backgroundColor: '#007AFF',
     padding: 20,
-    borderRadius: 10,
+    borderRadius: 15,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 4,
+    elevation: 5,
   },
   logo: {
     width: 100,
     height: 100,
+    marginBottom: 10,
   },
   companyName: {
     fontSize: 22,
     fontWeight: 'bold',
+    color: '#fff',
   },
   location: {
     fontSize: 16,
-    color: 'gray',
+    color: '#E0E0E0',
   },
   inputContainer: {
     marginBottom: 20,
     width: '100%',
   },
+  loginAsLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#007AFF',
+  },
+  dropdown: {
+    borderColor: '#007AFF',
+    borderRadius: 5,
+    marginBottom: 15,
+  },
+  dropdownText: {
+    fontSize: 16,
+  },
+  dropdownContainer: {
+    borderColor: '#007AFF',
+  },
   input: {
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: '#007AFF',
     borderRadius: 5,
-    padding: 10,
+    padding: 12,
     marginBottom: 10,
     backgroundColor: '#fff',
+    fontSize: 16,
+    color: '#333',
   },
   passwordToggle: {
     alignSelf: 'flex-end',
+    marginBottom: 15,
   },
   passwordToggleText: {
     fontSize: 14,
-    color: '#007BFF',
+    color: '#007AFF',
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -173,41 +194,39 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   loginButton: {
-    backgroundColor: '#007BFF',
-    padding: 10,
-    borderRadius: 5,
+    backgroundColor: '#007AFF',
+    padding: 15,
+    borderRadius: 10,
     flex: 1,
     marginRight: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 4,
+    elevation: 5,
   },
   resetButton: {
     backgroundColor: '#6c757d',
-    padding: 10,
-    borderRadius: 5,
+    padding: 15,
+    borderRadius: 10,
     flex: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 4,
+    elevation: 5,
   },
   buttonText: {
     color: 'white',
     textAlign: 'center',
     fontWeight: 'bold',
+    fontSize: 16,
   },
   footerText: {
     marginTop: 20,
     color: 'gray',
     fontSize: 14,
   },
-  loginAsLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  dropdown: {
-    borderColor: 'gray',
-    borderRadius: 5,
-    padding: 10,
-  },
-  dropdownText: {
-    fontSize: 16,
-  }
 });
 
 export default LoginPage;
