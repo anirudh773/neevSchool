@@ -12,110 +12,11 @@ import {
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
-import DropDownPicker from 'react-native-dropdown-picker';
-
-const LoginPage = () => {
-  const userRoles = [
-    { id: 1, label: 'Admin', value: 'admin' },
-    { id: 2, label: 'Teacher', value: 'teacher' },
-    { id: 3, label: 'Student', value: 'student' },
-  ];
-
-  const [loginAs, setLoginAs] = useState(null);
-  const [erpId, setErpId] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [openDropdown, setOpenDropdown] = useState(false);
-  const router = useRouter();
-
-  const handleLogin = async () => {
-    if (!erpId || !password) {
-      Alert.alert('Error', 'Please enter both ERP ID and Password.');
-      return;
-    }
-
-    try {
-      router.replace('../(tab)');
-    } catch (error) {
-      console.error('Login Error:', error);
-      Alert.alert('Error', 'Something went wrong! Please try again later.');
-    }
-  };
-
-  const handlePasswordVisibility = () => {
-    setShowPassword(!showPassword);
-  };
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.contentContainer}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Image
-            source={require('../../assets/images/image.png')}
-            style={styles.logo}
-          />
-          <Text style={styles.companyName}>Neev Learn Private Limited</Text>
-          <Text style={styles.location}>Gurugram</Text>
-        </View>
-
-        {/* Input Section */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.loginAsLabel}>Login As</Text>
-          <DropDownPicker
-            open={openDropdown}
-            value={loginAs}
-            items={userRoles}
-            setOpen={setOpenDropdown}
-            setValue={setLoginAs}
-            style={styles.dropdown}
-            textStyle={styles.dropdownText}
-            placeholder="Select Role"
-            placeholderStyle={{ color: '#888' }}
-            dropDownContainerStyle={styles.dropdownContainer}
-          />
-
-          <TextInput
-            style={styles.input}
-            placeholder="ERP Login ID"
-            placeholderTextColor="#aaa"
-            value={erpId}
-            onChangeText={setErpId}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="ERP Password"
-            placeholderTextColor="#aaa"
-            secureTextEntry={!showPassword}
-            value={password}
-            onChangeText={setPassword}
-          />
-          <TouchableOpacity style={styles.passwordToggle} onPress={handlePasswordVisibility}>
-            <Text style={styles.passwordToggleText}>{showPassword ? 'Hide' : 'Show'} Password</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Buttons */}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-            <Text style={styles.buttonText}>Login</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.resetButton}>
-            <Text style={styles.buttonText}>Reset Password</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Footer */}
-        <Text style={styles.footerText}>Unable to login?</Text>
-      </ScrollView>
-    </SafeAreaView>
-  );
-};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#E3F2FD', // Light blue background
+    backgroundColor: '#E3F2FD',
   },
   contentContainer: {
     flexGrow: 1,
@@ -227,6 +128,115 @@ const styles = StyleSheet.create({
     color: 'gray',
     fontSize: 14,
   },
+  disabledButton: {
+    opacity: 0.7,
+  },
 });
+
+const LoginPage = () => {
+  const [userId, setUserId] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  const handleLogin = async () => {
+    if (!userId || !password) {
+      Alert.alert('Error', 'Please enter both User ID and Password.');
+      return;
+    }
+
+    setLoading(true);
+    
+    try {
+      const response = await fetch('https://testcode-2.onrender.com/school/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId,
+          password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        await Promise.all([
+          SecureStore.setItemAsync('userToken', data.token),
+          SecureStore.setItemAsync('userData', JSON.stringify(data.userInfo)),
+          SecureStore.setItemAsync('userPermission', JSON.stringify(data.permission)),
+          SecureStore.setItemAsync('schoolClasses', JSON.stringify(data.classes)),
+        ]);
+        router.replace('../(tab)');
+      } else {
+        Alert.alert('Error', data.message || 'Login failed. Please try again.');
+      }
+    } catch (error) {
+      console.error('Login Error:', error);
+      Alert.alert('Error', 'Something went wrong! Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.contentContainer}>
+        <View style={styles.header}>
+          <Image
+            source={require('../../assets/images/image.png')}
+            style={styles.logo}
+          />
+          <Text style={styles.companyName}>Neev Learn Private Limited</Text>
+          <Text style={styles.location}>Gurugram</Text>
+        </View>
+
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            placeholder="User ID"
+            placeholderTextColor="#aaa"
+            value={userId}
+            onChangeText={setUserId}
+            keyboardType="number-pad"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor="#aaa"
+            secureTextEntry={!showPassword}
+            value={password}
+            onChangeText={setPassword}
+          />
+          <TouchableOpacity style={styles.passwordToggle} onPress={handlePasswordVisibility}>
+            <Text style={styles.passwordToggleText}>
+              {showPassword ? 'Hide' : 'Show'} Password
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity 
+            style={[styles.loginButton, loading && styles.disabledButton]} 
+            onPress={handleLogin}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>
+              {loading ? 'Logging in...' : 'Login'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.footerText}>Unable to login?</Text>
+      </ScrollView>
+    </SafeAreaView>
+  );
+};
 
 export default LoginPage;
