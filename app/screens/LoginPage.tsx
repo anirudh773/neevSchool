@@ -178,10 +178,11 @@ const LoginPage = () => {
         alert('Failed to get push token for push notification!');
         return;
       }
+      token = 'xyz'
       
-      token = (await Notifications.getExpoPushTokenAsync({
-        projectId: 'your-project-id-here'
-      })).data;
+      // token = (await Notifications.getExpoPushTokenAsync({
+      //   projectId: 'your-project-id-here'
+      // })).data;
     } else {
       // Return a test token for emulator
       token = 'EMULATOR-TEST-TOKEN-' + Date.now();
