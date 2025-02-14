@@ -9,7 +9,7 @@ const Landing: React.FC = () => {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      // router.replace('/(tab)')
+    // router.replace('/(tab)')
      router.replace('/screens/LoginPage');
     }, 2000);
 

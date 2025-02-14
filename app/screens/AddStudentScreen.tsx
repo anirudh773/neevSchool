@@ -8,14 +8,13 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 const AddStudentScreen = () => {
   const router = useRouter();
-  const { classId, sectionId, className, sectionName } = useLocalSearchParams();
+  const { sectionId, className, sectionName } = useLocalSearchParams();
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [datePickerMode, setDatePickerMode] = useState<'dob' | 'admission'>('dob');
   const [loading, setLoading] = useState(false);
@@ -86,21 +85,65 @@ const AddStudentScreen = () => {
       if (!response.ok) {
         throw new Error('Failed to add student');
       }
-      Alert.alert('Success', 'Student added successfully', [
+      Alert.alert(
+        '✅ Success', 
+        'Student added successfully',
+        [
+          {
+            text: '✅ Success',
+            onPress: () => {
+              setFormData({
+                firstName: '',
+                lastName: '',
+                schoolId: 1,
+                dateOfBirth: new Date(),
+                gender: '',
+                sectionsId: Number(sectionId),
+                admissionDate: new Date(),
+                parentName: '',
+                parentContact: '',
+                address: '',
+                email: '',
+                aadhaarNumber: '',
+              });
+            },
+            style: 'default'
+          }
+        ],
         {
-          text: 'OK',
-          onPress: () => router.back()
+          cancelable: false,
+          overlayStyle: {
+            backgroundColor: 'rgba(0,0,0,0.5)',
+          },
+          containerStyle: {
+            backgroundColor: 'white',
+            borderRadius: 16,
+            padding: 24,
+            alignItems: 'center',
+            width: '80%',
+          },
+          titleStyle: {
+            fontSize: 20,
+            fontWeight: 'bold',
+            color: '#1F2937', // gray-800
+            marginBottom: 8,
+          },
+          messageStyle: {
+            fontSize: 16,
+            color: '#4B5563', // gray-600
+            textAlign: 'center',
+            marginBottom: 24,
+          }
         }
-      ]);
+      );
     } catch (error) {
       setLoading(false)
-      console.error('Error saving student:', error);
       Alert.alert('Error', 'Failed to save student');
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => router.back()}
@@ -172,7 +215,7 @@ const AddStudentScreen = () => {
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Gender</Text>
           <View style={styles.genderButtons}>
-            {['male', 'female', 'other'].map((gender) => (
+            {['male', 'female'].map((gender) => (
               <TouchableOpacity
                 key={gender}
                 style={[
@@ -212,6 +255,7 @@ const AddStudentScreen = () => {
             onChangeText={(value) => handleInputChange('parentContact', value)}
             placeholder="Enter parent contact"
             keyboardType="phone-pad"
+            maxLength={10}
           />
         </View>
 
@@ -267,14 +311,18 @@ const AddStudentScreen = () => {
           onChange={handleDateChange}
         />
       )}
-    </SafeAreaView>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
+    flex: 2,
+    backgroundColor: "#ECF0F1"
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 2
   },
   header: {
     padding: 16,

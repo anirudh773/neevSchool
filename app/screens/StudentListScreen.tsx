@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   ScrollView,
@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 interface Student {
@@ -31,6 +31,7 @@ interface Student {
   aadhaarNumber: string;
   section: {
     id: number;
+    name: string
   };
   class: {
     id: number;
@@ -40,21 +41,23 @@ interface Student {
 
 const StudentListScreen = () => {
   const router = useRouter();
-  const { classId, sectionId } = useLocalSearchParams();
+  const { classId, sectionId, className, sectionName } = useLocalSearchParams();
   const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [dateType, setDateType] = useState<'dob' | 'admission'>('dob');
 
-  // Fetch students by section
-  useEffect(() => {
-    fetchStudents();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchStudents();
+    }, [])
+  );
 
   const fetchStudents = async () => {
     try {
+      setLoading(true)
       const response = await fetch(`https://testcode-2.onrender.com/school/getStudentBySection?sectionId=${sectionId}`);
       const data = await response.json();
       if (data.success) {
@@ -63,7 +66,6 @@ const StudentListScreen = () => {
         Alert.alert('Error', 'Failed to fetch students');
       }
     } catch (error) {
-      console.log(error, 'sdffdfdfdfdfdfdfd')
       Alert.alert('Error', 'Failed to fetch students');
     } finally {
       setLoading(false);
@@ -72,31 +74,46 @@ const StudentListScreen = () => {
 
   const handleEditStudent = async () => {
     if (!selectedStudent) return;
+    let obj = {
+      aadhaarNumber: selectedStudent.aadhaarNumber,
+      firstName: selectedStudent.firstName,
+      lastName: selectedStudent.lastName,
+      schoolId: 1,
+      dateOfBirth: selectedStudent.dateOfBirth,
+      gender: selectedStudent.gender,
+      sectionsId: +sectionId,
+      admissionDate: selectedStudent.admissionDate,
+      parentName: selectedStudent.parentName,
+      address: selectedStudent.address,
+      email: selectedStudent.email
+    }
+    console.log(obj, selectedStudent.id)
 
     try {
       setLoading(true);
-      const response = await fetch(`https://testcode-2.onrender.com/school/updateStudent/${selectedStudent.id}`, {
+      const response = await fetch(`https://testcode-2.onrender.com/school/updateStudent?studentId=${selectedStudent.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...selectedStudent,
-          sectionId: selectedStudent.section.id,
-          classId: selectedStudent.class.id,
-        }),
+        body: JSON.stringify(obj),
       });
 
+      console.log(response)
       if (response.ok) {
         Alert.alert('Success', 'Student updated successfully');
         setEditModalVisible(false);
         fetchStudents();
       } else {
+        setLoading(false);
+        setEditModalVisible(false);
         Alert.alert('Error', 'Failed to update student');
       }
     } catch (error) {
+      setLoading(false);
       Alert.alert('Error', 'Failed to update student');
     } finally {
+      setEditModalVisible(false);
       setLoading(false);
     }
   };
@@ -108,15 +125,18 @@ const StudentListScreen = () => {
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Delete ❌',
           style: 'destructive',
           onPress: async () => {
             try {
               setLoading(true);
-              const response = await fetch(
-                `https://testcode-2.onrender.com/school/deleteStudent/${studentId}`,
-                { method: 'DELETE' }
-              );
+              const response = await fetch(`https://testcode-2.onrender.com/school/updateStudent?studentId=${studentId}`, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({isActive: false}),
+              });
 
               if (response.ok) {
                 Alert.alert('Success', 'Student deleted successfully');
@@ -297,7 +317,7 @@ const StudentListScreen = () => {
             {student.firstName} {student.lastName}
           </Text>
           <Text style={styles.studentEmail}>{student.email}</Text>
-          <Text style={styles.studentClass}>Class: {student.class.name}</Text>
+          <Text style={styles.studentClass}>Class: {student.class.name} Section: {sectionName}</Text>
         </View>
       </View>
       <View style={styles.actionButtons}>
@@ -334,7 +354,10 @@ const StudentListScreen = () => {
         <Text style={styles.title}>Students</Text>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => router.push('/screens/AddStudentScreen')}
+          onPress={() => router.push({
+            pathname: '/screens/AddStudentScreen',
+            params: { classId, sectionId, className, sectionName }
+          })}
         >
           <FontAwesome name="plus" size={16} color="#ffffff" />
           <Text style={styles.addButtonText}>Add Student</Text>

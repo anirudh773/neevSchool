@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,21 @@ import {
   SafeAreaView,
   ScrollView,
   Alert,
+  Platform,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
+import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
+
+// Configure notification handler
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -140,6 +152,85 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  // Function to register for push notifications
+  async function registerForPushNotificationsAsync() {
+    let token;
+
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
+    }
+
+    if (Device.isDevice) {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      
+      if (finalStatus !== 'granted') {
+        alert('Failed to get push token for push notification!');
+        return;
+      }
+      
+      token = (await Notifications.getExpoPushTokenAsync({
+        projectId: 'your-project-id-here'
+      })).data;
+    } else {
+      // Return a test token for emulator
+      token = 'EMULATOR-TEST-TOKEN-' + Date.now();
+      console.log('Using emulator - generated test token:', token);
+    }
+
+    return token;
+  }
+
+  // Function to send test notification
+  const sendTestNotification = async () => {
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "Login Successful!",
+          body: "Welcome to Neev Learn Private Limited",
+          data: { screen: 'Home' },
+        },
+        trigger: null, // Show immediately
+      });
+    } catch (error) {
+      console.error('Error sending test notification:', error);
+    }
+  };
+
+  // Set up notification listeners
+  useEffect(() => {
+    // Request notification permissions
+    Notifications.requestPermissionsAsync();
+
+    // Set up notification listeners
+    const foregroundSubscription = Notifications.addNotificationReceivedListener(notification => {
+      console.log('Received notification:', notification);
+    });
+
+    const backgroundSubscription = Notifications.addNotificationResponseReceivedListener(response => {
+      console.log('Background notification tapped:', response);
+      // You can handle navigation here if needed
+      // const screen = response.notification.request.content.data.screen;
+      // router.push(screen);
+    });
+
+    return () => {
+      // Clean up listeners
+      foregroundSubscription.remove();
+      backgroundSubscription.remove();
+    };
+  }, []);
+
   const handleLogin = async () => {
     if (!userId || !password) {
       Alert.alert('Error', 'Please enter both User ID and Password.');
@@ -149,6 +240,13 @@ const LoginPage = () => {
     setLoading(true);
     
     try {
+      // Get push token
+      const pushToken = await registerForPushNotificationsAsync();
+      console.log('Push Token:', pushToken);
+
+      // Store push token
+      await SecureStore.setItemAsync('pushToken', pushToken);
+
       const response = await fetch('https://testcode-2.onrender.com/school/login', {
         method: 'POST',
         headers: {
@@ -157,18 +255,25 @@ const LoginPage = () => {
         body: JSON.stringify({
           userId,
           password,
+          // pushToken, // Send token to backend
         }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
+        // Store all tokens and data
         await Promise.all([
           SecureStore.setItemAsync('userToken', data.token),
           SecureStore.setItemAsync('userData', JSON.stringify(data.userInfo)),
           SecureStore.setItemAsync('userPermission', JSON.stringify(data.permission)),
           SecureStore.setItemAsync('schoolClasses', JSON.stringify(data.classes)),
+          SecureStore.setItemAsync('pushToken', pushToken),
         ]);
+        
+        // Send test notification
+        await sendTestNotification();
+        
         router.replace('../(tab)');
       } else {
         Alert.alert('Error', data.message || 'Login failed. Please try again.');

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   ScrollView,
@@ -7,16 +7,18 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
   Modal,
   Text,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { TextInput } from 'react-native-paper';
+import { ActivityIndicator, TextInput } from 'react-native-paper';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import { useRouter } from 'expo-router';
-import * as DocumentPicker from 'expo-document-picker';
+import { DocumentPickerOptions, getDocumentAsync } from 'expo-document-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as SecureStore from 'expo-secure-store';
+import { storage } from '../../firebaseConfig'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 type TeacherData = {
   name: string;
@@ -30,25 +32,26 @@ type TeacherData = {
   schoolId: number;
 };
 
-const subjects = [
-  { id: 1, name: 'Mathematics' },
-  { id: 2, name: 'Science' },
-  { id: 3, name: 'English' },
-  { id: 4, name: 'Social Studies' }
-];
-
-const qualifications = [
-  { id: 1, name: 'B.Ed' },
-  { id: 2, name: 'M.Ed' },
-  { id: 3, name: 'PhD' }
-];
+interface Qualifications {
+  id: number;
+  name: string;
+}
+interface Subjects {
+  id: number;
+  name: string;
+}
 
 const RegisterTeacher: React.FC = () => {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showSubjectPicker, setShowSubjectPicker] = useState(false);
+  const [showPrimarySubjectPicker, setShowPrimarySubjectPicker] = useState(false);
+  const [showSubstituteSubjectPicker, setShowSubstituteSubjectPicker] = useState(false);
   const [showQualificationPicker, setShowQualificationPicker] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [docLoading, setDocLoading] = useState(false);
+  const [qualifications, setQualifications] = useState<Qualifications[]>([]);
+  const [subjects, setSubjects] = useState<Subjects[]>([]);
   
   const [formData, setFormData] = useState<TeacherData>({
     name: '',
@@ -61,6 +64,50 @@ const RegisterTeacher: React.FC = () => {
     joiningDate: new Date().toISOString().split('T')[0],
     schoolId: 1,
   });
+
+  useEffect(() => {
+    if(qualifications.length === 0){
+      loadExamMaterData();
+    }
+  }, []);
+
+  const loadExamMaterData = async () => {
+    try {
+      setLoading(true);
+      let [schoolQualification, schoolSubject] = await Promise.all([
+        SecureStore.getItemAsync('qualification'),
+        SecureStore.getItemAsync('subjectBySchool')
+      ]);
+      
+      if (schoolQualification && schoolSubject) {
+        const parsedQualification = JSON.parse(schoolQualification);
+        const parsedSubject = JSON.parse(schoolSubject);
+        if (parsedQualification.length > 0 && parsedSubject.length > 0) {
+          setQualifications(parsedQualification);
+          setSubjects(parsedSubject);
+          return;
+        }
+      }
+
+      const response = await fetch(`https://testcode-2.onrender.com/school/getExamMasterData?schoolId=1`, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+
+      await Promise.all([
+        SecureStore.setItemAsync('qualification', JSON.stringify(data.data.qualification)),
+        SecureStore.setItemAsync('subjectBySchool', JSON.stringify(data.data.subjectBySchool))
+      ]);
+      setQualifications(data.data.qualification);
+      setSubjects(data.data.subjectBySchool);
+    } catch (err) {
+      Alert.alert('Error', 'Failed to load master data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleInputChange = (name: keyof TeacherData, value: any) => {
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -79,85 +126,121 @@ const RegisterTeacher: React.FC = () => {
       Alert.alert('Error', 'Please enter a valid 10-digit mobile number');
       return false;
     }
+    if (formData.primarySubjectId === formData.substituteSubjectId) {
+      Alert.alert('Error', 'Primary and Substitute subjects cannot be the same');
+      return false;
+    }
     return true;
   };
 
   const handleUpload = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
+      const options = {
         type: ['image/*', 'application/pdf'],
-      });
-
+      };
+      
+      const result = await getDocumentAsync(options);
+  
       if (!result.canceled && result.assets?.[0]) {
-        handleInputChange('resumeUrl', result.assets[0].uri);
-        Alert.alert('Success', 'Resume uploaded successfully');
+        setDocLoading(true);
+        
+        // Get the file name and extension
+        const uri = result.assets[0].uri;
+        const fileName = uri.split('/').pop();
+        const timestamp = Date.now();
+        const uniqueFileName = `resumes/${timestamp}_${fileName}`;
+  
+        // Create a reference to the file location
+        const storageRef = ref(storage, uniqueFileName);
+  
+        // Convert URI to Blob
+        const response = await fetch(uri);
+        const blob = await response.blob();
+  
+        // Upload the file
+        const snapshot = await uploadBytes(storageRef, blob);
+        
+        // Get the download URL
+        const downloadUrl = await getDownloadURL(snapshot.ref);
+        
+        // Update form data with the download URL
+        handleInputChange('resumeUrl', downloadUrl);
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to upload resume');
+      console.error('Upload error:', error);
+      Alert.alert('Error', 'Failed to upload resume. Please try again.');
+    } finally {
+      setDocLoading(false);
     }
   };
 
   const handleSubmit = async () => {
-    console.log('clicked')
-    if (!validateForm()){
-      console.log('Form is not valid')
-      return;
-    }
-    console.log(formData)
+    if (!validateForm()) return;
+    
     setIsLoading(true);
     try {
-      console.log('clicked')
       const date = new Date(formData.joiningDate);
+      const formattedDate = date.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      }).split('/').join('-');
 
-      const day = date.getDate().toString().padStart(2, '0'); // Get day and pad with leading zero if needed
-      const month = (date.getMonth() + 1).toString().padStart(2, '0'); // Get month (0-based, so add 1) and pad
-      const year = date.getFullYear(); // Get full year
+      const dataToSubmit = {
+        ...formData,
+        joiningDate: formattedDate
+      };
 
-      const formattedDate = `${day}-${month}-${year}`;
-      formData.joiningDate = formattedDate
       const response = await fetch('https://testcode-2.onrender.com/school/addTeacher', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(dataToSubmit),
       });
 
       const data = await response.json();
-      console.log(data)
       if (response.ok && data.success) {
         Alert.alert(
           'Success',
           'Teacher registered successfully!',
-          [{ text: 'OK', onPress: () => router.back() }]
+          [{ text: 'OK', onPress: () =>  router.push('/screens/listTeacherss')} ]
         );
       } else {
-        setIsLoading(false);
-        throw new Error('Registration failed');
+        throw new Error(data.message || 'Registration failed');
       }
     } catch (error) {
-      setIsLoading(false);
-      Alert.alert('Error', 'Failed to register teacher');
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to register teacher');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const SubjectPickerModal = () => (
+  const SubjectPickerModal = ({ 
+    visible, 
+    onClose, 
+    onSelect, 
+    title 
+  }: { 
+    visible: boolean; 
+    onClose: () => void; 
+    onSelect: (id: number) => void;
+    title: string;
+  }) => (
     <Modal
-      visible={showSubjectPicker}
+      visible={visible}
       transparent
       animationType="slide"
-      onRequestClose={() => setShowSubjectPicker(false)}
+      onRequestClose={onClose}
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Select Subject</Text>
+          <Text style={styles.modalTitle}>{title}</Text>
           {subjects.map(subject => (
             <TouchableOpacity
               key={subject.id}
               style={styles.modalItem}
               onPress={() => {
-                handleInputChange('primarySubjectId', subject.id);
-                setShowSubjectPicker(false);
+                onSelect(subject.id);
+                onClose();
               }}
             >
               <Text>{subject.name}</Text>
@@ -195,6 +278,14 @@ const RegisterTeacher: React.FC = () => {
     </Modal>
   );
 
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="white" style={styles.loadingIndicator} />
+        <Text style={styles.loadingText}>Loading Master data...</Text>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -277,7 +368,7 @@ const RegisterTeacher: React.FC = () => {
             />
           )}
 
-          <TouchableOpacity onPress={() => setShowSubjectPicker(true)}>
+          <TouchableOpacity onPress={() => setShowPrimarySubjectPicker(true)}>
             <TextInput
               label="Primary Subject"
               value={subjects.find(s => s.id === formData.primarySubjectId)?.name}
@@ -288,7 +379,7 @@ const RegisterTeacher: React.FC = () => {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => setShowSubjectPicker(true)}>
+          <TouchableOpacity onPress={() => setShowSubstituteSubjectPicker(true)}>
             <TextInput
               label="Substitute Subject"
               value={subjects.find(s => s.id === formData.substituteSubjectId)?.name}
@@ -301,7 +392,7 @@ const RegisterTeacher: React.FC = () => {
 
           <TouchableOpacity onPress={() => setShowQualificationPicker(true)}>
             <TextInput
-              label="Teacher higest qualification"
+              label="Teacher highest qualification"
               value={qualifications.find(s => s.id === formData.qualifications)?.name}
               editable={false}
               style={styles.input}
@@ -314,8 +405,14 @@ const RegisterTeacher: React.FC = () => {
             style={styles.uploadButton}
             onPress={handleUpload}
           >
-            <FontAwesome name="upload" size={20} color="#fff" />
-            <Text style={styles.uploadText}>Upload Resume</Text>
+            {docLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+               <FontAwesome name="upload" size={20} color="#fff" />
+               <Text style={styles.uploadText}>Upload Resume</Text>
+              </>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -324,7 +421,7 @@ const RegisterTeacher: React.FC = () => {
             disabled={isLoading}
           >
             {isLoading ? (
-              <FontAwesome name="spinner" size={20} color="#fff" />
+              <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.submitText}>Register Teacher</Text>
             )}
@@ -332,7 +429,20 @@ const RegisterTeacher: React.FC = () => {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <SubjectPickerModal />
+      <SubjectPickerModal 
+        visible={showPrimarySubjectPicker}
+        onClose={() => setShowPrimarySubjectPicker(false)}
+        onSelect={(id) => handleInputChange('primarySubjectId', id)}
+        title="Select Primary Subject"
+      />
+
+      <SubjectPickerModal 
+        visible={showSubstituteSubjectPicker}
+        onClose={() => setShowSubstituteSubjectPicker(false)}
+        onSelect={(id) => handleInputChange('substituteSubjectId', id)}
+        title="Select Substitute Subject"
+      />
+
       <QualificationPickerModal />
     </SafeAreaView>
   );
@@ -388,6 +498,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 24,
+    marginBottom: 32,
   },
   disabledButton: {
     opacity: 0.7,
@@ -420,6 +531,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#007AFF',
+  },
+  loadingIndicator: {
+    marginBottom: 20,
+  },
+  loadingText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '500',
+  }
 });
 
 export default RegisterTeacher;

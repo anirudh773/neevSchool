@@ -133,6 +133,7 @@ const TimeTableManager = () => {
     <SafeAreaView style={styles.container}>
       <View style={styles.card}>
         <View style={styles.cardHeader}>
+          
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.backButton}

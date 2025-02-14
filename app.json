@@ -16,7 +16,8 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-       "package": "com.yourdomain.myapp"
+      "package": "com.yourdomain.myapp",
+      "permissions": ["NOTIFICATIONS"]
     },
     "web": {
       "bundler": "metro",

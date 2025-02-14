@@ -116,8 +116,6 @@ const TeacherAttendanceManagement: React.FC = () => {
         records: records
       };
 
-      console.log(payload, 'dsdsdsdsdsdsdsdsdsdsdsd===============');
-
       const response = await fetch('https://testcode-2.onrender.com/school/submitAttendance', {
         method: 'POST',
         headers: {

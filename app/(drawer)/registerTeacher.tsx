@@ -62,12 +62,9 @@ const RegisterTeacher: React.FC = () => {
 
   // Handle file selection (resume upload)
   const selectFile = () => {
-    console.log("File selection triggered");
     
     launchImageLibrary({ mediaType: 'photo', includeBase64: false }, (response) => {
-        console.log("File selection triggered----------------");
       if (response.didCancel) {
-        console.log("File selection canceled");
         return;
       }
       if (response.errorCode || !response.assets) {
@@ -78,7 +75,6 @@ const RegisterTeacher: React.FC = () => {
   
       // Process the selected file
       const file = response.assets[0] as Asset;
-      console.log("Selected file:", file);
       uploadFile(file.uri as string, file.fileName || `resume_${Date.now()}`);
     });
 
@@ -86,10 +82,8 @@ const RegisterTeacher: React.FC = () => {
   };
 
   const testPicker = async () => {
-    console.log("Testing launchImageLibrary");
     let res = await launchImageLibrary({ mediaType: 'photo', includeBase64: false })
 
-    console.log(res);
     // launchImageLibrary({ mediaType: 'photo', includeBase64: false }, (response) => {
     //   console.log("Response from launchImageLibrary:", response);
     // });
@@ -118,7 +112,6 @@ const RegisterTeacher: React.FC = () => {
         (snapshot) => {
           // Optional: Track upload progress
           const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          console.log(`Upload is ${progress}% done`);
         },
         (error) => {
           // Handle upload errors

@@ -289,7 +289,7 @@ const AttendanceCalendar: React.FC = () => {
       {/* Overall Attendance Statistics */}
       <View style={styles.overallStatsContainer}>
         <LinearGradient
-          colors={['#FF69B4', '#2980B9']}
+          colors={['#2980B9', '#2980B9']}
           style={[styles.overallStatsCard, styles.shadowElevation]}
         >
           <Text style={styles.overallStatsTitle}>Overall Attendance</Text>
@@ -323,7 +323,7 @@ const AttendanceCalendar: React.FC = () => {
       {/* Monthly Attendance Summary */}
       <View style={styles.summaryContainer}>
         <LinearGradient
-          colors={['#FF6EB4', '#27AE60']}
+          colors={['#27AE60', '#27AE60']}
           style={[styles.summaryCard, styles.shadowElevation]}
         >
           <Text style={styles.summaryTitle}>This Month</Text>

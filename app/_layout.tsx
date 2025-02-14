@@ -23,7 +23,13 @@ export default function RootLayout() {
       <Stack.Screen name="screens/TimeTableScreen" options={{ title: 'Time Table Create', headerShown: false }} />
       <Stack.Screen name="screens/HoliDayScreenn" options={{ title: 'List holiday', headerShown: true }} />
       <Stack.Screen name="screens/Admin/CheckAttendence" options={{ title: 'Attendence', headerShown: true }} />
+      <Stack.Screen name="screens/Admin/ExamSystem" options={{ title: 'Admin exam', headerShown: true }} />
+      <Stack.Screen name="screens/Admin/AddExamScreeen" options={{title: 'Create exam', headerShown: true}} />
+      <Stack.Screen name="screens/Admin/FeedMarksScreen" options={{title: 'Feed marks', headerShown: true}} />
+      <Stack.Screen name="screens/Admin/ExamDashboard" options={{title: 'Exam Dashboard', headerShown: true}} />
+      <Stack.Screen name="screens/Admin/HomeworkManagementSystem" options={{title: 'Homework Management', headerShown: true}} />
       <Stack.Screen name="screens/Student/AttendenceScreen" options={{ title: 'Your attendence', headerShown: true }} />
+      <Stack.Screen name="screens/Student/YourExamsAndMarksScreen" options={{ title: 'Your  Exam', headerShown: true }} />
       <Stack.Screen name="screens/Teacher/FeedAttendence" options={{ title: 'Feed attendence', headerShown: true }} />
     </Stack>
     

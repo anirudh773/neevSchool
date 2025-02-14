@@ -58,12 +58,11 @@ const ClassSectionsScreen = () => {
     setModalVisible(true);
   };
 
-  const handleSectionPress = (classId: number, sectionId: number) => {
-    console.log('////////////////////changes', classId, sectionId)
-    // router.push('/screens/StudentListScreen')
+  const handleSectionPress = (classId: number, sectionId: number, className: string, sectionName: string) => {
+    console.log('////////////////////changes', className, sectionName)
     router.push({
         pathname: '/screens/StudentListScreen',
-        params: { classId, sectionId }
+        params: { classId, sectionId, className, sectionName }
       });
     setModalVisible(false);
   };
@@ -125,7 +124,7 @@ const ClassSectionsScreen = () => {
                 <TouchableOpacity
                   key={section.id}
                   style={styles.sectionCard}
-                  onPress={() => handleSectionPress(selectedClass.id, section.id)}
+                  onPress={() => handleSectionPress(selectedClass.id, section.id, selectedClass.name, section.name)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.sectionContent}>
