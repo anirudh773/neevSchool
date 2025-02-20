@@ -16,6 +16,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useFocusEffect } from '@react-navigation/native';
 
 // Type Definitions
 interface Section {
@@ -68,6 +69,22 @@ interface DateRange {
     endDate: Date;
 }
 
+// Add interface for teacher info
+interface UserInfo {
+	id: number;
+	userId: string;
+	schoolId: number;
+	name: string;
+	role: number;
+	teacherId: number;
+	classTeacherDetails?: {
+		sectionId: number;
+		sectionName: string;
+		classId: number;
+		className: string;
+	};
+}
+
 const CheckAttendence: React.FC = () => {
 	const router = useRouter();
 	const [classes, setClasses] = useState<ClassData[]>([]);
@@ -87,6 +104,9 @@ const CheckAttendence: React.FC = () => {
         show: boolean;
         type: 'start' | 'end';
     }>({ show: false, type: 'start' });
+
+	// Add userInfo state
+	const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
 
 	const { width } = Dimensions.get('window');
 	const isTablet = width >= 768;
@@ -220,9 +240,36 @@ const CheckAttendence: React.FC = () => {
 		try {
 			setLoading(true);
 			setError('');
-			const classesData = await SecureStore.getItemAsync('schoolClasses');
-			if (classesData) {
-				setClasses(JSON.parse(classesData));
+			const [classesData, userDataStr] = await Promise.all([
+				SecureStore.getItemAsync('schoolClasses'),
+				SecureStore.getItemAsync('userData')
+			]);
+
+			if (classesData && userDataStr) {
+				const userData: UserInfo = JSON.parse(userDataStr);
+				setUserInfo(userData);
+				const allClasses = JSON.parse(classesData);
+
+				if (userData.role === 2 && userData.classTeacherDetails) {
+					// For class teacher, filter to show only their class
+					const teacherClass = allClasses.find((c: ClassData) => 
+						c.id == userData.classTeacherDetails?.classId.toString()
+					);
+					
+					if (teacherClass) {
+						setClasses([teacherClass]);
+						setSelectedClass(teacherClass);
+						
+						const teacherSection = teacherClass.sections.find((s: Section) => 
+							s.id == userData.classTeacherDetails?.sectionId.toString()
+						);
+						if (teacherSection) {
+							setSelectedSection(teacherSection);
+						}
+					}
+				} else {
+					setClasses(allClasses);
+				}
 			}
 		} catch (error) {
 			setError('Failed to load class data. Please try again.');
@@ -231,25 +278,19 @@ const CheckAttendence: React.FC = () => {
 		}
 	}, []);
 
-	// Effect to fetch attendance when section is selected
-	useEffect(() => {
-		if (selectedSection) {
-			fetchAttendanceData(selectedSection.id);
-		}
-	}, [selectedSection, dateRange]);
+	// Replace the existing useEffect
+	useFocusEffect(
+		useCallback(() => {
+			if (selectedSection) {
+				fetchAttendanceData(selectedSection.id);
+			}
+		}, [selectedSection?.id, dateRange])
+	);
 
-	// Refresh handler
-	const onRefresh = useCallback(() => {
-		setRefreshing(true);
-		Promise.all([
-			loadClassesData(),
-			selectedSection ? Promise.resolve() : Promise.resolve()
-		]).finally(() => setRefreshing(false));
-	}, [loadClassesData, selectedSection]);
-
+	// Initial load only once
 	useEffect(() => {
 		loadClassesData();
-	}, [loadClassesData]);
+	}, []); // Empty dependency array for initial load only
 
 	// Render weekly trends chart
 	const renderWeeklyTrends = () => (
@@ -318,60 +359,60 @@ const CheckAttendence: React.FC = () => {
 
 	const renderStudentCard = (student: Student) => {
 		const stats = calculateAttendanceStats(student.attendance);
-		const attendanceColor = parseFloat(stats.presentPercentage) >= 75 ? '#4CAF50' : '#F44336';
+		const attendancePercentage = parseFloat(stats.presentPercentage);
+		const getStatusColor = () => {
+			if (attendancePercentage >= 90) return '#22C55E';
+			if (attendancePercentage >= 75) return '#3B82F6';
+			return '#EF4444';
+		};
+		const statusColor = getStatusColor();
 
 		return (
 			<View style={styles.studentCard}>
-				<View style={styles.studentPhotoContainer}>
-				<Text style={styles.studentName} numberOfLines={1}>
-						{student.name}
-				</Text>
-					<Image
-						source={{ uri: 'https://dummyimage.com/600x400/red/' }}
-						style={styles.studentPhoto}
-					/>
-				<View style={styles.studentInfo}>
-					<Text style={styles.rollNumber}>
-						{student.rollNumber}
+				{/* Header with attendance indicator */}
+				<View style={[styles.attendanceIndicator, { backgroundColor: `${statusColor}20` }]}>
+					<FontAwesome name="circle" size={8} color={statusColor} />
+					<Text style={[styles.attendanceText, { color: statusColor }]}>
+						{attendancePercentage}% Attendance
 					</Text>
+				</View>
 
-					<View style={styles.statsRow}>
-						<View style={styles.statItem}>
-							<Text style={[styles.statCount, { color: '#4CAF50' }]}>
-								{stats.presentDays}
-							</Text>
-							<Text style={styles.statLabel}>P</Text>
-						</View>
-
-						<View style={styles.statItem}>
-							<Text style={[styles.statCount, { color: '#F44336' }]}>
-								{stats.absentDays}
-							</Text>
-							<Text style={styles.statLabel}>A</Text>
-						</View>
-
-						<View style={styles.statItem}>
-							<Text style={[styles.statCount, { color: '#FF9800' }]}>
-								{stats.lateDays}
-							</Text>
-							<Text style={styles.statLabel}>L</Text>
-						</View>
-					</View>
-
-					<View style={styles.percentageContainer}>
-						<View style={styles.percentageBar}>
-							<View
-								style={[
-									styles.percentageFill,
-									// { width: `${stats.presentPercentage}%`, backgroundColor: attendanceColor }
-								]}
-							/>
-						</View>
-						<Text style={[styles.percentageText, { color: attendanceColor }]}>
-							{stats.presentPercentage}%
+				{/* Student Info */}
+				<View style={styles.studentInfo}>
+					<View style={styles.nameContainer}>
+						<Text style={styles.studentName} numberOfLines={1}>
+							{student.name}
 						</Text>
+						<View style={styles.rollNoContainer}>
+							<Text style={styles.rollNoLabel}>Roll No:</Text>
+							<Text style={styles.rollNoValue}>{student.rollNumber}</Text>
+						</View>
 					</View>
 				</View>
+
+				{/* Attendance Stats */}
+				<View style={styles.statsContainer}>
+					<View style={styles.statBox}>
+						<View style={[styles.statIconBg, { backgroundColor: '#22C55E20' }]}>
+							<FontAwesome name="check" size={14} color="#22C55E" />
+						</View>
+						<Text style={styles.statCount}>{stats.presentDays}</Text>
+						<Text style={styles.statLabel}>Present</Text>
+					</View>
+					<View style={styles.statBox}>
+						<View style={[styles.statIconBg, { backgroundColor: '#EF444420' }]}>
+							<FontAwesome name="times" size={14} color="#EF4444" />
+						</View>
+						<Text style={styles.statCount}>{stats.absentDays}</Text>
+						<Text style={styles.statLabel}>Absent</Text>
+					</View>
+					<View style={styles.statBox}>
+						<View style={[styles.statIconBg, { backgroundColor: '#F59E0B20' }]}>
+							<FontAwesome name="clock-o" size={14} color="#F59E0B" />
+						</View>
+						<Text style={styles.statCount}>{stats.lateDays}</Text>
+						<Text style={styles.statLabel}>Late</Text>
+					</View>
 				</View>
 			</View>
 		);
@@ -488,7 +529,7 @@ const renderDateSelection = () => (
 					refreshControl={
 						<RefreshControl
 							refreshing={refreshing}
-							onRefresh={onRefresh}
+							onRefresh={() => {}}
 							colors={['#2196F3']}
 							tintColor="#2196F3"
 						/>
@@ -715,8 +756,9 @@ const renderDateSelection = () => (
 			marginBottom: 5
 		},
 		statLabel: {
-			fontSize: 14,
-			color: '#666'
+			fontSize: 12,
+			color: '#6B7280',
+			fontWeight: '500',
 		},
 		trendCard: {
 			backgroundColor: 'white',
@@ -878,73 +920,69 @@ const renderDateSelection = () => (
 			marginBottom: 10
 		},
 		studentCard: {
-			backgroundColor: 'white',
+			backgroundColor: '#FFFFFF',
 			borderRadius: 12,
-			padding: 12,
-			flexDirection: 'row',
-			shadowColor: '#000',
+			margin: 8,
+			shadowColor: '#0F172A',
 			shadowOffset: { width: 0, height: 2 },
-			shadowOpacity: 0.1,
-			shadowRadius: 4,
-			elevation: 3
+			shadowOpacity: 0.08,
+			shadowRadius: 12,
+			elevation: 3,
+			overflow: 'hidden',
 		},
-		studentPhotoContainer: {
-			marginRight: 12
+		attendanceIndicator: {
+			flexDirection: 'row',
+			alignItems: 'center',
+			gap: 6,
+			paddingHorizontal: 12,
+			paddingVertical: 6,
 		},
-		studentPhoto: {
-			width: 80,
-			height: 80,
-			borderRadius: 40,
-			backgroundColor: '#f0f0f0'
+		attendanceText: {
+			fontSize: 12,
+			fontWeight: '600',
 		},
 		studentInfo: {
-			flex: 1
+			padding: 12,
+		},
+		nameContainer: {
+			gap: 4,
 		},
 		studentName: {
 			fontSize: 16,
-			fontWeight: 'bold',
-			alignItems: 'center',
-			color: '#333',
-			marginBottom: 4
+			fontWeight: '600',
+			color: '#1F2937',
 		},
-		rollNumber: {
-			fontSize: 12,
-			color: '#666',
-			marginBottom: 8
-		},
-		statsRow: {
+		rollNoContainer: {
 			flexDirection: 'row',
-			justifyContent: 'space-between',
-			marginBottom: 8,
-			paddingRight: 10
+			alignItems: 'center',
+			gap: 4,
 		},
-		statItem: {
-			alignItems: 'center'
+		rollNoLabel: {
+			fontSize: 13,
+			color: '#6B7280',
+		},
+		rollNoValue: {
+			fontSize: 13,
+			fontWeight: '500',
+			color: '#374151',
+		},
+		statsContainer: {
+			flexDirection: 'row',
+			borderTopWidth: 1,
+			borderTopColor: '#F1F5F9',
+		},
+		statIconBg: {
+			width: 28,
+			height: 28,
+			borderRadius: 14,
+			justifyContent: 'center',
+			alignItems: 'center',
 		},
 		statCount: {
 			fontSize: 16,
-			fontWeight: 'bold'
+			fontWeight: '600',
+			color: '#1F2937',
 		},
-		percentageContainer: {
-			flexDirection: 'row',
-			alignItems: 'center',
-			gap: 8
-		},
-		percentageBar: {
-			flex: 1,
-			height: 4,
-			backgroundColor: '#e0e0e0',
-			borderRadius: 2,
-			overflow: 'hidden'
-		},
-		percentageFill: {
-			height: '100%',
-			borderRadius: 2
-		},
-		percentageText: {
-			fontSize: 12,
-			fontWeight: 'bold'
-		}
 	})
 
 	export default	CheckAttendence

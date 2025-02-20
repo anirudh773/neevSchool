@@ -271,6 +271,10 @@ const LoginPage = () => {
           SecureStore.setItemAsync('schoolClasses', JSON.stringify(data.classes)),
           SecureStore.setItemAsync('pushToken', pushToken),
         ]);
+
+        if(data.userInfo && data.userInfo.role == 2){
+          await SecureStore.setItemAsync('teacherClasses', JSON.stringify(data.teacherClasses));
+        }
         
         // Send test notification
         await sendTestNotification();

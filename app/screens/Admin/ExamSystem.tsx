@@ -91,10 +91,20 @@ const ExamDashboardScreen: React.FC = () => {
   const loadClassesData = async () => {
     try {
       setLoading(true);
-      const classesData = await SecureStore.getItemAsync('schoolClasses');
-      if (classesData) {
-        const parsedData = JSON.parse(classesData);
-        setClasses(parsedData || []);
+      let userInfo = await SecureStore.getItemAsync('userData');
+      userInfo = JSON.parse(userInfo);
+      if(userInfo && userInfo.role && userInfo.role == 2 ){
+        const classesData = await SecureStore.getItemAsync('teacherClasses');
+        if (classesData) {
+          const parsedData = JSON.parse(classesData);
+          setClasses(parsedData || []);
+        }
+      } else{
+        const classesData = await SecureStore.getItemAsync('schoolClasses');
+        if (classesData) {
+          const parsedData = JSON.parse(classesData);
+          setClasses(parsedData || []);
+        }
       }
     } catch (err) {
 
@@ -125,7 +135,6 @@ const ExamDashboardScreen: React.FC = () => {
         const recentExamClassWise = data.data.recentExam.filter(
           obj => obj.class == selectedClass.name
         );
-        console.log(selectedClass, recentExamClassWise, 'dsdsdsdsdsdsdsdsdsdsdsssd')
         setRecentExams(recentExamClassWise);
       }
 

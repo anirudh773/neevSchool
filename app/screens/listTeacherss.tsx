@@ -11,13 +11,16 @@ import {
     Linking,
     KeyboardAvoidingView,
     Platform,
+    Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, TextInput } from 'react-native-paper';
-import FontAwesome from 'react-native-vector-icons/FontAwesome';
+import { ActivityIndicator, TextInput, Surface, IconButton } from 'react-native-paper';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
 import { Class } from '@/constants/types';
+
+const { width } = Dimensions.get('window');
 
 type Teacher = {
     id: number;
@@ -30,6 +33,10 @@ type Teacher = {
     joiningDate: string;
     resumeUrl?: string;
     sectionId?: number;
+    primarySubject: string;
+    substituteSubjectId: string;
+    qualification: string;
+    isActive: boolean;
 };
 
 type SubjectId = '1' | '2' | '3' | '4';
@@ -40,6 +47,322 @@ const subjects: Record<SubjectId, string> = {
     '3': 'English',
     '4': 'Social Studies'
 };
+
+const formatClassSection = (className: string, sectionName: string): string => 
+    `${className}-Section-${sectionName}`;
+
+interface TeacherCardProps {
+    teacher: Teacher;
+    onEdit: (teacher: Teacher) => void;
+    onDelete: (teacher: Teacher) => void;
+}
+
+const TeacherCard: React.FC<TeacherCardProps> = ({ teacher, onEdit, onDelete }) => (
+    <Surface style={styles.teacherCard}>
+        <View style={styles.cardHeader}>
+            <View style={styles.teacherInfo}>
+                <Text style={styles.teacherName}>{teacher.name}</Text>
+                <Text style={styles.teacherEmail}>{teacher.email}</Text>
+            </View>
+            <View style={styles.actionButtons}>
+                <TouchableOpacity 
+                    style={[styles.actionButton, styles.editButton]}
+                    onPress={() => onEdit(teacher)}
+                >
+                    <FontAwesome name="edit" size={16} color="#FFF" />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                    style={[styles.actionButton, styles.deleteButton]}
+                    onPress={() => onDelete(teacher)}
+                >
+                    <FontAwesome name="trash" size={16} color="#FFF" />
+                </TouchableOpacity>
+            </View>
+        </View>
+        
+        <View style={styles.cardContent}>
+            <View style={styles.infoRow}>
+                <View style={styles.iconContainer}>
+                    <FontAwesome name="phone" size={14} color="#5C6BC0" />
+                </View>
+                <Text style={styles.infoText}>{teacher.mobileNumber}</Text>
+            </View>
+            <View style={styles.infoRow}>
+                <View style={styles.iconContainer}>
+                    <FontAwesome name="book" size={14} color="#5C6BC0" />
+                </View>
+                <Text style={styles.infoText}>
+                    Primary: {subjects[teacher.primarySubjectId as SubjectId] || 'Unknown Subject'}
+                </Text>
+            </View>
+
+            <View style={styles.infoRow}>
+                <View style={styles.iconContainer}>
+                    <FontAwesome name="book" size={14} color="#5C6BC0" />
+                </View>
+                <Text style={styles.infoText}>
+                    Substitute Subject: {subjects[teacher.substituteSubjectId as SubjectId] || 'N/A'}
+                </Text>
+            </View>
+            <View style={styles.infoRow}>
+                <View style={styles.iconContainer}>
+                    <FontAwesome name="graduation-cap" size={14} color="#5C6BC0" />
+                </View>
+                <Text style={styles.infoText}>
+                    Class Teacher Of: {subjects[teacher.substituteSubjectId as SubjectId] || 'N/A'}
+                </Text>
+            </View>
+        </View>
+    </Surface>
+);
+
+interface ClassSelectionModalProps {
+    visible: boolean;
+    onClose: () => void;
+    onSelect: (classId: number, sectionId: number) => void;
+    editingTeacher: Teacher | null;
+    classes: Class[];
+}
+
+const ClassSelectionModal: React.FC<ClassSelectionModalProps> = ({ 
+    visible, 
+    onClose, 
+    onSelect, 
+    editingTeacher,
+    classes
+}) => (
+    <Modal
+        visible={visible}
+        transparent
+        animationType="slide"
+        onRequestClose={onClose}
+    >
+        <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Select Class & Section</Text>
+                <ScrollView>
+                    {classes.map((classItem) => (
+                        <View key={classItem.id}>
+                            {classItem.sections.length > 0 ? (
+                                classItem.sections.map((section) => (
+                                    <TouchableOpacity
+                                        key={`${classItem.id}-${section.id}`}
+                                        style={[
+                                            styles.classOption,
+                                            editingTeacher?.sectionId === section.id &&
+                                            styles.selectedClassOption
+                                        ]}
+                                        onPress={() => {
+                                            onSelect(classItem.id, section.id);
+                                        }}
+                                    >
+                                        <Text style={[
+                                            styles.classOptionText,
+                                            editingTeacher?.sectionId === section.id &&
+                                            styles.selectedClassOptionText
+                                        ]}>
+                                            {formatClassSection(classItem.name, section.name)}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))
+                            ) : (
+                                <View style={styles.noSectionsContainer}>
+                                    <Text style={styles.noSectionsText}>
+                                        {classItem.name} - No sections available
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+                    ))}
+                </ScrollView>
+                <TouchableOpacity
+                    style={[styles.modalButton, styles.cancelButton]}
+                    onPress={onClose}
+                >
+                    <Text style={styles.buttonText}>Cancel</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+    </Modal>
+);
+
+interface EditModalProps {
+    visible: boolean;
+    onClose: () => void;
+    onUpdate: (data: TeacherUpdateData) => void;
+    teacher: Teacher | null;
+    selectedClassSection: {
+        className: string;
+        sectionId: number;
+        sectionName: string;
+    } | null;
+    setShowClassSelect: (show: boolean) => void;
+}
+
+interface TeacherUpdateData {
+    name: string;
+    email: string;
+    primarySubjectId?: string;
+    substituteSubjectId?: string;
+    classTeacherOf?: number;
+}
+
+interface UpdateData {
+    name: string;
+    email: string;
+    classTeacherOf?: number;
+}
+
+const EditModal: React.FC<EditModalProps> = ({ 
+    visible, 
+    onClose, 
+    onUpdate, 
+    teacher, 
+    selectedClassSection,
+    setShowClassSelect 
+}) => {
+    const [formData, setFormData] = useState<TeacherUpdateData>({
+        name: '',
+        email: '',
+        primarySubjectId: '',
+        substituteSubjectId: '',
+    });
+
+    useEffect(() => {
+        if (teacher) {
+            setFormData({
+                name: teacher.name,
+                email: teacher.email,
+                primarySubjectId: teacher.primarySubjectId,
+                substituteSubjectId: teacher.substituteSubjectId,
+            });
+        }
+    }, [teacher]);
+
+    const handleUpdate = () => {
+        if (!formData.name || !formData.email) {
+            Alert.alert('Error', 'Please fill in all required fields');
+            return;
+        }
+        
+        const updateData = {
+            ...formData,
+            classTeacherOf: selectedClassSection?.sectionId
+        };
+        
+        onUpdate(updateData);
+    };
+
+    return (
+        <Modal
+            visible={visible}
+            animationType="slide"
+            transparent={true}
+            onRequestClose={onClose}
+        >
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={styles.modalContainer}
+            >
+                <Surface style={styles.editModalContent}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.editModalTitle}>Edit Teacher Details</Text>
+                        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                            <FontAwesome name="times" size={20} color="#666" />
+                        </TouchableOpacity>
+                    </View>
+
+                    <ScrollView style={styles.editFormContainer}>
+                        <View style={styles.editInputGroup}>
+                            <Text style={styles.editInputLabel}>Full Name</Text>
+                            <TextInput
+                                style={styles.editInput}
+                                value={formData.name}
+                                onChangeText={(text) => setFormData(prev => ({ ...prev, name: text }))}
+                                placeholder="Enter teacher's name"
+                                mode="outlined"
+                                outlineColor="#E0E0E0"
+                                activeOutlineColor="#1A237E"
+                                left={<TextInput.Icon icon="account" color="#5C6BC0" />}
+                            />
+                        </View>
+
+                        <View style={styles.editInputGroup}>
+                            <Text style={styles.editInputLabel}>Email Address</Text>
+                            <TextInput
+                                style={styles.editInput}
+                                value={formData.email}
+                                onChangeText={(text) => setFormData(prev => ({ ...prev, email: text }))}
+                                keyboardType="email-address"
+                                placeholder="Enter email address"
+                                mode="outlined"
+                                outlineColor="#E0E0E0"
+                                activeOutlineColor="#1A237E"
+                                left={<TextInput.Icon icon="email" color="#5C6BC0" />}
+                            />
+                        </View>
+
+                        <View style={styles.editInputGroup}>
+                            <Text style={styles.editInputLabel}>Class Teacher Of</Text>
+                            <TouchableOpacity
+                                style={styles.classSelectField}
+                                onPress={() => setShowClassSelect(true)}
+                            >
+                                <FontAwesome name="users" size={18} color="#5C6BC0" style={styles.selectIcon} />
+                                <Text style={styles.classSelectText}>
+                                    {selectedClassSection ?
+                                        formatClassSection(selectedClassSection.className, selectedClassSection.sectionName) :
+                                        'Select Class'}
+                                </Text>
+                                <FontAwesome name="chevron-down" size={14} color="#666" />
+                            </TouchableOpacity>
+                        </View>
+                    </ScrollView>
+
+                    <View style={styles.editModalFooter}>
+                        <TouchableOpacity
+                            style={[styles.editModalButton, styles.cancelModalButton]}
+                            onPress={onClose}
+                        >
+                            <FontAwesome name="times" size={18} color="#FFF" />
+                            <Text style={styles.modalButtonText}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.editModalButton, styles.saveModalButton]}
+                            onPress={handleUpdate}
+                        >
+                            <FontAwesome name="check" size={18} color="#FFF" />
+                            <Text style={styles.modalButtonText}>Save Changes</Text>
+                        </TouchableOpacity>
+                    </View>
+                </Surface>
+            </KeyboardAvoidingView>
+        </Modal>
+    );
+};
+
+const LoadingState = () => (
+    <View style={styles.loadingContainer}>
+        <Surface style={styles.loadingCard}>
+            <ActivityIndicator 
+                size="large" 
+                color="#1A237E" 
+                style={styles.loadingIndicator} 
+            />
+            <View style={styles.loadingTextContainer}>
+                <Text style={styles.loadingTitle}>Loading Teachers</Text>
+                <Text style={styles.loadingSubtitle}>Please wait while we fetch the data</Text>
+            </View>
+        </Surface>
+    </View>
+);
+
+interface Subject {
+    id: number;
+    name: string;
+    description: string;
+    icon: string;
+}
 
 const TeacherListing: React.FC = () => {
     const router = useRouter();
@@ -52,15 +375,12 @@ const TeacherListing: React.FC = () => {
     const [classes, setClasses] = useState<Class[]>([]);
     const [showClassSelect, setShowClassSelect] = useState(false);
     const [editLoading, setEditLoading] = useState(false);
-    // const [editingTeacher, setEditingTeacher] = useState(null);
     const [selectedClassSection, setSelectedClassSection] = useState<{
         className: string;
         sectionId: number;
         sectionName: string;
     } | null>(null);
-
-    const formatClassSection = (className: string, sectionName: string) =>
-        `${className}-Section-${sectionName}`;
+    const [subjects, setSubjects] = useState<Subject[]>([]);
 
     const handleViewResume = (resumeUrl?: string) => {
         if (resumeUrl) {
@@ -74,19 +394,14 @@ const TeacherListing: React.FC = () => {
 
     const fetchTeachers = async () => {
         try {
-            const response = await fetch('https://testcode-2.onrender.com/school/getTeachersBySchoolId?schoolId=1', {
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
+            setLoading(true);
+            const response = await fetch('https://testcode-2.onrender.com/school/getTeachersBySchoolId?schoolId=1');
             const data = await response.json();
-            if (response.ok && data.success) {
+            if (data.success) {
                 setTeachers(data.data);
-            } else {
-                Alert.alert('Error', 'Failed to fetch teachers');
             }
         } catch (error) {
-            Alert.alert('Error', 'Network error');
+            Alert.alert('Error', 'Failed to fetch teachers');
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -94,18 +409,26 @@ const TeacherListing: React.FC = () => {
     };
 
     useEffect(() => {
-        const loadClasses = async () => {
+        const loadData = async () => {
             try {
                 const classesData = await SecureStore.getItemAsync('schoolClasses');
                 if (classesData) {
                     setClasses(JSON.parse(classesData));
                 }
+
+                const response = await fetch('https://testcode-2.onrender.com/school/getSchudeleMasterData?schoolId=1');
+                const result = await response.json();
+                
+                if (result.success) {
+                    setSubjects(result.data.subjects);
+                    await SecureStore.setItemAsync('subjects', JSON.stringify(result.data.subjects));
+                }
             } catch (error) {
-                console.error('Error loading classes:', error);
+                console.error('Error loading data:', error);
             }
         };
 
-        loadClasses();
+        loadData();
         fetchTeachers();
     }, []);
 
@@ -119,61 +442,30 @@ const TeacherListing: React.FC = () => {
         setShowEditModal(true);
     };
 
-    const handleDelete = async (teacherId: number) => {
-        Alert.alert(
-            'Confirm Delete',
-            'Are you sure you want to delete this teacher?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            const response = await fetch('https://testcode-2.onrender.com/school/updateTeachers', {
-                                method: 'PUT',
-                                headers: {
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({
-                                    teacherUpdates: [{
-                                        id: teacherId,
-                                        isActive: 0
-                                    }]
-                                })
-                            });
-
-                            if (response.ok) {
-                                setTeachers(teachers.filter(t => t.id !== teacherId));
-                                Alert.alert('Success', 'Teacher deleted successfully');
-                            } else {
-                                Alert.alert('Error', 'Failed to delete teacher');
-                            }
-                        } catch (error) {
-                            Alert.alert('Error', 'Network error while deleting teacher');
-                        }
-                    }
-                }
-            ]
-        );
+    const handleDelete = async (teacher: Teacher): Promise<void> => {
+        try {
+            const response = await fetch(`https://testcode-2.onrender.com/school/updateTeacher/${teacher.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ isActive: false })
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                Alert.alert('Success', 'Teacher deleted successfully');
+                fetchTeachers();
+            }
+        } catch (error) {
+            Alert.alert('Error', 'Failed to delete teacher');
+        }
     };
 
-    const handleUpdatemm = async () => {
+    const handleUpdatemm = async (updateData: TeacherUpdateData): Promise<void> => {
         if (!editingTeacher) return;
 
         try {
-            setEditLoading(true)
-            const updateData = {
-                teacherUpdates: [{
-                    id: editingTeacher.id,
-                    name: editingTeacher.name,
-                    email: editingTeacher.email,
-                    mobileNumber: editingTeacher.mobileNumber,
-                    classTeacherOf: +editingTeacher.sectionId
-                }]
-            };
-
-            const response = await fetch('https://testcode-2.onrender.com/school/updateTeachers', {
+            setEditLoading(true);
+            const response = await fetch(`https://testcode-2.onrender.com/school/updateTeacher/${editingTeacher.id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
@@ -182,24 +474,19 @@ const TeacherListing: React.FC = () => {
             });
 
             const data = await response.json();
-            setEditLoading(false)
 
             if (response.ok && data.success) {
-                setTeachers(teachers.map(t =>
-                    t.id === editingTeacher.id ? editingTeacher : t
-                ));
-                setShowEditModal(false);
                 Alert.alert('Success', 'Teacher updated successfully');
                 fetchTeachers();
-            } else {
                 setShowEditModal(false);
+            } else {
                 Alert.alert('Error', data.message || 'Failed to update teacher');
             }
         } catch (error) {
-            setEditLoading(false)
-            setShowEditModal(false);
             console.error('Update error:', error);
             Alert.alert('Error', 'Network error while updating teacher');
+        } finally {
+            setEditLoading(false);
         }
     };
 
@@ -208,284 +495,43 @@ const TeacherListing: React.FC = () => {
         teacher.email.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const TeacherCard = ({ teacher }: { teacher: Teacher }) => (
-        <View style={styles.card}>
-            <View style={styles.cardHeader}>
-                <Text style={styles.teacherName}>{teacher.name}</Text>
-                <View style={styles.actionButtons}>
-                    <TouchableOpacity
-                        onPress={() => handleEdit(teacher)}
-                        style={[styles.actionButton, styles.editButton]}
-                    >
-                        <FontAwesome name="edit" size={16} color="#fff" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={() => handleDelete(teacher.id)}
-                        style={[styles.actionButton, styles.deleteButton]}
-                    >
-                        <FontAwesome name="trash" size={16} color="#fff" />
-                    </TouchableOpacity>
-                </View>
-            </View>
-
-            <View style={styles.cardContent}>
-                <View style={styles.infoRow}>
-                    <FontAwesome name="envelope" size={14} color="#666" />
-                    <Text style={styles.infoText}>{teacher.email}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                    <FontAwesome name="phone" size={14} color="#666" />
-                    <Text style={styles.infoText}>{teacher.mobileNumber}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                    <FontAwesome name="book" size={14} color="#666" />
-                    <Text style={styles.infoText}>
-                        Class {teacher.classTeacherOf} - {subjects[teacher.primarySubjectId as SubjectId]}
-                    </Text>
-                </View>
-                <View style={styles.infoRow}>
-                    <FontAwesome name="calendar" size={14} color="#666" />
-                    <Text style={styles.infoText}>
-                        Joined: {new Date(teacher.joiningDate).toLocaleDateString()}
-                    </Text>
-                </View>
-                <TouchableOpacity
-                    style={styles.resumeButton}
-                    onPress={() => handleViewResume(teacher.resumeUrl)}
-                >
-                    <FontAwesome name="file-text" size={14} color="#fff" />
-                    <Text style={styles.resumeButtonText}>View Resume</Text>
-                </TouchableOpacity>
-            </View>
-        </View>
-    );
-
-    const ClassSelectionModal = () => (
-        <Modal
-            visible={showClassSelect}
-            transparent
-            animationType="slide"
-            onRequestClose={() => setShowClassSelect(false)}
-        >
-            <View style={styles.modalOverlay}>
-                <View style={styles.modalContent}>
-                    <Text style={styles.modalTitle}>Select Class & Section</Text>
-                    <ScrollView>
-                        {classes.map((classItem) => (
-                            <View key={classItem.id}>
-                                {classItem.sections.length > 0 ? (
-                                    classItem.sections.map((section) => (
-                                        <TouchableOpacity
-                                            key={`${classItem.id}-${section.id}`}
-                                            style={[
-                                                styles.classOption,
-                                                editingTeacher?.sectionId === section.id &&
-                                                styles.selectedClassOption
-                                            ]}
-                                            onPress={() => {
-                                                setEditingTeacher(prev =>
-                                                    prev ? {
-                                                        ...prev,
-                                                        classTeacherOf: classItem.name,
-                                                        sectionId: section.id
-                                                    } : null
-                                                );
-                                                setSelectedClassSection({
-                                                    className: classItem.name,
-                                                    sectionId: section.id,
-                                                    sectionName: section.name
-                                                });
-                                                setShowClassSelect(false);
-                                            }}
-                                        >
-                                            <Text style={[
-                                                styles.classOptionText,
-                                                editingTeacher?.sectionId === section.id &&
-                                                styles.selectedClassOptionText
-                                            ]}>
-                                                {formatClassSection(classItem.name, section.name)}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))
-                                ) : (
-                                    <View style={styles.noSectionsContainer}>
-                                        <Text style={styles.noSectionsText}>
-                                            {classItem.name} - No sections available
-                                        </Text>
-                                    </View>
-                                )}
-                            </View>
-                        ))}
-                    </ScrollView>
-                    <TouchableOpacity
-                        style={[styles.modalButton, styles.cancelButton]}
-                        onPress={() => setShowClassSelect(false)}
-                    >
-                        <Text style={styles.buttonText}>Cancel</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
-        </Modal>
-    );
-
-    const EditModal = () => {
-        // Local state to track form values
-        const [formData, setFormData] = useState({
-            name: '',
-            email: '',
-            mobileNumber: '',
-            classTeacherOf: ''
-        });
-
-        // Update local state when editingTeacher changes
-        useEffect(() => {
-            if (editingTeacher) {
-                setFormData({
-                    name: editingTeacher.name || '',
-                    email: editingTeacher.email || '',
-                    mobileNumber: editingTeacher.mobileNumber || '',
-                    classTeacherOf: editingTeacher.classTeacherOf || ''
-                });
-            }
-        }, [editingTeacher]);
-
-        const handleInputChange = (field: any, value: any) => {
-            setFormData(prev => ({
-                ...prev,
-                [field]: value
-            }));
-        };
-
-        const handleUpdate = async () => {
-            await handleUpdatemm()
-            // Update the teacher with formData
-            // Your update logic here
-            setShowEditModal(false);
-            setEditingTeacher(null);
-        };
-
-        return (
-            <Modal
-                visible={showEditModal}
-                animationType="slide"
-                transparent={true}
-                onRequestClose={() => {
-                    setShowEditModal(false);
-                    setEditingTeacher(null);
-                }}
-            >
-                <KeyboardAvoidingView
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                    style={styles.modalContainer}
-                >
-                    <View style={styles.modalContent}>
-                        <ScrollView>
-                            <Text style={styles.modalTitle}>Edit Teacher</Text>
-
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.label}>Name</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={formData.name}
-                                    onChangeText={(text) => handleInputChange('name', text)}
-                                    placeholder="Name"
-                                />
-                            </View>
-
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.label}>Email</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={formData.email}
-                                    onChangeText={(text) => handleInputChange('email', text)}
-                                    keyboardType="email-address"
-                                    placeholder="Email"
-                                />
-                            </View>
-
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.label}>Mobile Number</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={formData.mobileNumber}
-                                    onChangeText={(text) => handleInputChange('mobileNumber', text)}
-                                    keyboardType="phone-pad"
-                                    placeholder="Mobile Number"
-                                />
-                            </View>
-
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.label}>Class Teacher Of</Text>
-                                <TouchableOpacity
-                                    style={styles.classSelectButton}
-                                    onPress={() => setShowClassSelect(true)}
-                                >
-                                    <Text style={styles.classSelectValue}>
-                                        {selectedClassSection ?
-                                            formatClassSection(selectedClassSection.className, selectedClassSection.sectionName) :
-                                            (formData.classTeacherOf || 'Select Class')}
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-
-                            <View style={styles.buttonContainer}>
-                                <TouchableOpacity
-                                    style={[styles.button, styles.cancelButton]}
-                                    onPress={() => {
-                                        setShowEditModal(false);
-                                        setEditingTeacher(null);
-                                    }}
-                                >
-                                    <Text style={styles.buttonText}>Cancel</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.button, styles.saveButton]}
-                                    onPress={handleUpdate}
-                                >
-                                    <Text style={styles.buttonText}>Save</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </ScrollView>
-                    </View>
-                </KeyboardAvoidingView>
-            </Modal>
-        );
+    const getSubjectName = (subjectId: number): string => {
+        return subjects.find(s => s.id === subjectId)?.name || 'Unknown Subject';
     };
 
     if (loading) {
-        return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="white" style={styles.loadingIndicator} />
-                <Text style={styles.loadingText}>Loading Master data...</Text>
-            </View>
-        );
+        return <LoadingState />;
     }
     if (editLoading) {
         return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="white" style={styles.loadingIndicator} />
-                <Text style={styles.loadingText}>Updating teacher data...</Text>
+            <View style={styles.editLoadingContainer}>
+                <Surface style={styles.editLoadingCard}>
+                    <ActivityIndicator size="large" color="#1A237E" />
+                    <Text style={[styles.loadingTitle, { marginTop: 16 }]}>
+                        Updating Teacher
+                    </Text>
+                    <Text style={styles.loadingSubtitle}>
+                        Please wait while we save the changes
+                    </Text>
+                </Surface>
             </View>
         );
     }
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
-                <TouchableOpacity
-                    onPress={() => router.back()}
-                    style={styles.backButton}
-                >
-                    <FontAwesome name="arrow-left" size={24} color="#000" />
-                </TouchableOpacity>
-                <Text style={styles.headerText}>Teachers</Text>
-                <TouchableOpacity
-                    onPress={() => router.push('/screens/addTeacher')}
-                    style={styles.addButton}
-                >
-                    <FontAwesome name="plus" size={24} color="#007AFF" />
-                </TouchableOpacity>
-            </View>
+            <Surface style={styles.header}>
+                <View style={styles.headerContent}>
+                    <Text style={styles.title}>Teachers List</Text>
+                    <TouchableOpacity 
+                        style={styles.addButton}
+                        onPress={() => router.push('/screens/addTeacher')}
+                    >
+                        <FontAwesome name="plus" size={16} color="#fff" />
+                        <Text style={styles.addButtonText}>Add Teacher</Text>
+                    </TouchableOpacity>
+                </View>
+            </Surface>
 
             <TextInput
                 placeholder="Search teachers..."
@@ -496,14 +542,16 @@ const TeacherListing: React.FC = () => {
                 left={<TextInput.Icon icon="magnify" />} />
 
             <ScrollView
+                style={styles.content}
                 contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
                 }
             >
                 {filteredTeachers.length > 0 ? (
                     filteredTeachers.map(teacher => (
-                        <TeacherCard key={teacher.id} teacher={teacher} />
+                        <TeacherCard key={teacher.id} teacher={teacher} onEdit={handleEdit} onDelete={handleDelete} />
                     ))
                 ) : (
                     <Text style={styles.noTeachers}>
@@ -512,8 +560,38 @@ const TeacherListing: React.FC = () => {
                 )}
             </ScrollView>
 
-            <EditModal />
-            <ClassSelectionModal />
+            <EditModal
+                visible={showEditModal}
+                onClose={() => {
+                    setShowEditModal(false);
+                    setEditingTeacher(null);
+                }}
+                onUpdate={handleUpdatemm}
+                teacher={editingTeacher}
+                selectedClassSection={selectedClassSection}
+                setShowClassSelect={setShowClassSelect}
+            />
+            <ClassSelectionModal
+                visible={showClassSelect}
+                onClose={() => setShowClassSelect(false)}
+                onSelect={(classId, sectionId) => {
+                    setEditingTeacher(prev =>
+                        prev ? {
+                            ...prev,
+                            classTeacherOf: classes.find(c => c.id === classId)?.name || '',
+                            sectionId: sectionId
+                        } : null
+                    );
+                    setSelectedClassSection({
+                        className: classes.find(c => c.id === classId)?.name || '',
+                        sectionId: sectionId,
+                        sectionName: classes.find(c => c.id === classId)?.sections.find(s => s.id === sectionId)?.name || ''
+                    });
+                    setShowClassSelect(false);
+                }}
+                editingTeacher={editingTeacher}
+                classes={classes}
+            />
         </SafeAreaView>
     );
 };
@@ -521,81 +599,172 @@ const TeacherListing: React.FC = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: '#F8FAFF',
     },
     header: {
-        flexDirection: 'row',
-        alignItems: 'center',
         padding: 16,
         backgroundColor: '#fff',
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
+        elevation: 4,
+        shadowColor: '#1A237E',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        marginBottom: 8,
     },
-    headerText: {
-        flex: 1,
-        fontSize: 24,
+    headerContent: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    title: {
+        fontSize: Math.min(24, width * 0.06),
         fontWeight: 'bold',
-        marginLeft: 16,
-    },
-    backButton: {
-        padding: 8,
+        color: '#1A237E',
+        marginBottom: 4,
     },
     addButton: {
-        padding: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#4CAF50',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 25,
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
     },
-    searchInput: {
-        margin: 16,
-        backgroundColor: '#fff',
+    addButtonText: {
+        color: '#fff',
+        fontWeight: '600',
+        marginLeft: 8,
+        fontSize: 16,
+    },
+    content: {
+        flex: 1,
     },
     scrollContent: {
         padding: 16,
+        gap: 16,
     },
-    card: {
+    teacherCard: {
         backgroundColor: '#fff',
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
+        borderRadius: 16,
+        overflow: 'hidden',
         elevation: 3,
+        shadowColor: '#1A237E',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        marginBottom: 16,
     },
     cardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 12,
+        padding: 16,
+        backgroundColor: '#F8FAFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E0E0E0',
+    },
+    teacherInfo: {
+        flex: 1,
     },
     teacherName: {
-        fontSize: 18,
-        fontWeight: 'bold',
+        fontSize: Math.min(18, width * 0.045),
+        fontWeight: '600',
+        color: '#1A237E',
+        marginBottom: 4,
+    },
+    teacherEmail: {
+        fontSize: Math.min(14, width * 0.035),
+        color: '#5C6BC0',
     },
     actionButtons: {
         flexDirection: 'row',
+        gap: 8,
     },
     actionButton: {
-        padding: 8,
-        borderRadius: 6,
-        marginLeft: 8,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
     },
     editButton: {
-        backgroundColor: '#007AFF',
+        backgroundColor: '#4CAF50',
     },
     deleteButton: {
-        backgroundColor: '#FF3B30',
+        backgroundColor: '#FF5252',
     },
     cardContent: {
-        gap: 8,
+        padding: 16,
+        gap: 12,
     },
     infoRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 12,
+    },
+    iconContainer: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#E8EAF6',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     infoText: {
-        color: '#666',
+        fontSize: Math.min(14, width * 0.035),
+        color: '#424242',
         flex: 1,
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFF',
+        padding: 20,
+    },
+    loadingCard: {
+        padding: 24,
+        borderRadius: 16,
+        backgroundColor: '#FFFFFF',
+        alignItems: 'center',
+        elevation: 4,
+        shadowColor: '#1A237E',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        width: '90%',
+        maxWidth: 340,
+    },
+    loadingIndicator: {
+        marginBottom: 16,
+    },
+    loadingTextContainer: {
+        alignItems: 'center',
+    },
+    loadingTitle: {
+        fontSize: Math.min(20, width * 0.05),
+        fontWeight: 'bold',
+        color: '#1A237E',
+        marginBottom: 8,
+    },
+    loadingSubtitle: {
+        fontSize: Math.min(14, width * 0.035),
+        color: '#5C6BC0',
+        textAlign: 'center',
+    },
+    searchInput: {
+        margin: 16,
+        backgroundColor: '#fff',
     },
     modalOverlay: {
         flex: 1,
@@ -686,35 +855,6 @@ const styles = StyleSheet.create({
         color: '#666',
         fontStyle: 'italic',
     },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#007AFF',
-    },
-    loadingIndicator: {
-        marginBottom: 20,
-    },
-    loadingText: {
-        color: 'white',
-        fontSize: 18,
-        fontWeight: '500',
-    },
-    resumeButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#4CAF50',
-        padding: 8,
-        borderRadius: 6,
-        marginTop: 8,
-        justifyContent: 'center',
-        gap: 8,
-    },
-    resumeButtonText: {
-        color: '#fff',
-        fontWeight: 'bold',
-        fontSize: 14,
-    },
     modalContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -747,6 +887,122 @@ const styles = StyleSheet.create({
         padding: 12,
         borderRadius: 8,
         alignItems: 'center',
+    },
+    subtitle: {
+        fontSize: Math.min(14, width * 0.035),
+        color: '#5C6BC0',
+    },
+    editLoadingContainer: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000,
+    },
+    editLoadingCard: {
+        backgroundColor: '#FFFFFF',
+        padding: 20,
+        borderRadius: 12,
+        alignItems: 'center',
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+    },
+    editModalContent: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 20,
+        width: '90%',
+        maxWidth: 400,
+        maxHeight: '80%',
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E0E0E0',
+    },
+    editModalTitle: {
+        fontSize: Math.min(20, width * 0.05),
+        fontWeight: 'bold',
+        color: '#1A237E',
+    },
+    closeButton: {
+        padding: 8,
+    },
+    editFormContainer: {
+        marginTop: 16,
+    },
+    editInputGroup: {
+        marginBottom: 20,
+    },
+    editInputLabel: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#666',
+        marginBottom: 8,
+    },
+    editInput: {
+        backgroundColor: '#fff',
+    },
+    classSelectField: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+        borderRadius: 4,
+        backgroundColor: '#fff',
+    },
+    selectIcon: {
+        marginRight: 12,
+    },
+    classSelectText: {
+        flex: 1,
+        fontSize: 16,
+        color: '#333',
+    },
+    editModalFooter: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        gap: 12,
+        marginTop: 24,
+        paddingTop: 16,
+        borderTopWidth: 1,
+        borderTopColor: '#E0E0E0',
+    },
+    editModalButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 12,
+        borderRadius: 8,
+        gap: 8,
+    },
+    cancelModalButton: {
+        backgroundColor: '#FF5252',
+    },
+    saveModalButton: {
+        backgroundColor: '#4CAF50',
+    },
+    modalButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
     },
 });
 

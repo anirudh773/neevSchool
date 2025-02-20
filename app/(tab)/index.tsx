@@ -19,6 +19,12 @@ import { Permission, UserData } from '@/constants/types';
 const { width } = Dimensions.get('window');
 const cardWidth = (width - 60) / 2; // 40 is total horizontal padding
 
+const iconColors = {
+  primary: '#3F51B5',    // Indigo
+  secondary: '#5C6BC0',  // Lighter Indigo
+  accent: '#FF4081',     // Pink accent
+};
+
 const HomeScreen = () => {
   const [userPermissions, setUserPermissions] = useState<Permission[]>([]);
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -75,7 +81,7 @@ const HomeScreen = () => {
         <View style={styles.header}>
           <View>
             <Text style={styles.welcomeText}>Welcome back,</Text>
-            <Text style={styles.userIdText}>{userData?.userId}</Text>
+            <Text style={styles.userIdText}>{userData?.name || userData?.userId}</Text>
           </View>
           <TouchableOpacity style={styles.profileButton}>
             <FontAwesome name="user-circle" size={35} color="#007AFF" />
@@ -93,15 +99,15 @@ const HomeScreen = () => {
                 onPress={() => handleFeaturePress(feature)}
                 activeOpacity={0.7}
               >
-                <View style={styles.iconContainer}>
+                <View style={[styles.iconContainer, { backgroundColor: `${iconColors.primary}15` }]}>
                   <FontAwesome 
                     name={feature.icon || 'circle'}
-                    size={18} 
-                    color="#007AFF" 
+                    size={20} 
+                    color={iconColors.primary}
                   />
                 </View>
-                <Text style={styles.featureTitle}>{feature.featueName}</Text>
-                <Text style={styles.featureSubtitle}>Tap to access</Text>
+                <Text numberOfLines={1} style={styles.featureTitle}>{feature.featueName}</Text>
+                <Text numberOfLines={1} style={styles.featureSubtitle}>Tap to access</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -112,13 +118,21 @@ const HomeScreen = () => {
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           <TouchableOpacity style={styles.announcementCard}>
             <View style={styles.announcementIcon}>
-              <FontAwesome name="bullhorn" size={24} color="#007AFF" />
+              <FontAwesome name="bullhorn" size={20} color={iconColors.accent} />
             </View>
             <View style={styles.announcementContent}>
-              <Text style={styles.announcementTitle}>New Updates Available</Text>
-              <Text style={styles.announcementSubtitle}>Check what's new</Text>
+              <Text numberOfLines={1} style={styles.announcementTitle}>
+                New Updates Available
+              </Text>
+              <Text numberOfLines={1} style={styles.announcementSubtitle}>
+                Check what's new
+              </Text>
             </View>
-            <FontAwesome name="chevron-right" size={20} color="#007AFF" />
+            <FontAwesome 
+              name="chevron-right" 
+              size={16} 
+              color={iconColors.secondary} 
+            />
           </TouchableOpacity>
         </View>
 
@@ -129,7 +143,7 @@ const HomeScreen = () => {
             <Text style={styles.supportSubtitle}>Contact our support team</Text>
           </View>
           <View style={styles.supportButton}>
-            <FontAwesome name="headphones" size={20} color="#FFF" />
+            <FontAwesome name="headphones" size={16} color="#FFFFFF" />
             <Text style={styles.supportButtonText}>Support</Text>
           </View>
         </TouchableOpacity>
@@ -141,13 +155,13 @@ const HomeScreen = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#F8FAFF',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#F8FAFF',
   },
   container: {
     flex: 1,
@@ -158,138 +172,153 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 24,
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 16,
+    elevation: 4,
+    shadowColor: '#1A237E',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
   welcomeText: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: Math.min(16, width * 0.04),
+    color: '#5C6BC0',
+    fontWeight: '500',
   },
   userIdText: {
-    fontSize: 24,
+    fontSize: Math.min(24, width * 0.06),
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1A237E',
+    marginTop: 4,
+    textTransform: 'capitalize',
   },
   profileButton: {
-    padding: 5,
+    padding: 8,
+    backgroundColor: '#E8EAF6',
+    borderRadius: 12,
   },
   featuresSection: {
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: Math.min(20, width * 0.05),
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1A237E',
     marginBottom: 16,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    gap: 10,
   },
   featureCard: {
     width: cardWidth,
-    backgroundColor: '#FFF',
-    padding: 13,
-    marginBottom: 10,
-    borderRadius: 12,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 1, height: 5 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    borderRadius: 14,
+    elevation: 3,
+    shadowColor: '#1A237E',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    marginBottom: 4,
+    minHeight: 110,
   },
   iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F0F7FF',
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   featureTitle: {
-    fontSize: 16,
+    fontSize: Math.min(14, width * 0.035),
     fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
+    color: '#1A237E',
+    marginBottom: 2,
   },
   featureSubtitle: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: Math.min(11, width * 0.028),
+    color: '#5C6BC0',
   },
   quickActionsSection: {
     marginBottom: 24,
   },
   announcementCard: {
-    backgroundColor: '#FFF',
-    padding: 16,
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    padding: 14,
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowColor: '#1A237E',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
   },
   announcementIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F0F7FF',
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    backgroundColor: `${iconColors.accent}15`,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 14,
   },
   announcementContent: {
     flex: 1,
   },
   announcementTitle: {
-    fontSize: 16,
+    fontSize: Math.min(16, width * 0.04),
     fontWeight: '600',
-    color: '#333',
+    color: '#1A237E',
   },
   announcementSubtitle: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: Math.min(14, width * 0.035),
+    color: '#5C6BC0',
   },
   supportCard: {
-    backgroundColor: '#FFF',
-    padding: 16,
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    padding: 14,
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 24,
+    marginBottom: 20,
     elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowColor: '#1A237E',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
   },
   supportContent: {
     flex: 1,
   },
   supportTitle: {
-    fontSize: 18,
+    fontSize: Math.min(18, width * 0.045),
     fontWeight: '600',
-    color: '#333',
+    color: '#1A237E',
   },
   supportSubtitle: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: Math.min(14, width * 0.035),
+    color: '#5C6BC0',
   },
   supportButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#007AFF',
+    backgroundColor: iconColors.primary,
     paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    paddingHorizontal: 14,
+    borderRadius: 10,
   },
   supportButtonText: {
-    color: '#FFF',
+    color: '#FFFFFF',
     marginLeft: 8,
     fontWeight: '500',
+    fontSize: Math.min(14, width * 0.035),
   },
 });
 

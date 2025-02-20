@@ -25,6 +25,24 @@ interface ClassData extends Class {
   sections: Section[];
 }
 
+// Add interface for teacher info
+interface ClassTeacherDetails {
+  sectionId: number;
+  sectionName: string;
+  classId: number;
+  className: string;
+}
+
+interface UserInfo {
+  id: number;
+  userId: string;
+  schoolId: number;
+  name: string;
+  role: number;
+  teacherId: number;
+  classTeacherDetails?: ClassTeacherDetails;
+}
+
 const { width } = Dimensions.get('window');
 // Adjusted for better spacing with 2 cards per row
 const cardWidth = (width - 60) / 2; // 40 = horizontal padding (16 * 2) + gap between cards (8)
@@ -35,13 +53,45 @@ const ClassSectionsScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [classes, setClasses] = useState<ClassData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
 
   useEffect(() => {
     const loadClasses = async () => {
       try {
-        const classesData = await SecureStore.getItemAsync('schoolClasses');
-        if (classesData) {
-          setClasses(JSON.parse(classesData));
+        setLoading(true);
+        const [classesData, userInfoStr] = await Promise.all([
+          SecureStore.getItemAsync('schoolClasses'),
+          SecureStore.getItemAsync('userData')
+        ]);
+
+        if (classesData && userInfoStr) {
+          const userInfo: UserInfo = JSON.parse(userInfoStr);
+          setUserInfo(userInfo);
+          
+          const allClasses: ClassData[] = JSON.parse(classesData);
+
+          console.log(userInfo)
+
+          if (userInfo.role === 2 && userInfo.classTeacherDetails) {
+            // Filter classes for class teacher
+            const teacherClass = allClasses.find(c => 
+              c.id === userInfo.classTeacherDetails?.classId
+            );
+            
+            if (teacherClass) {
+              // Filter sections to show only teacher's section
+              const filteredClass = {
+                ...teacherClass,
+                sections: teacherClass.sections.filter(s => 
+                  s.id === userInfo.classTeacherDetails?.sectionId
+                )
+              };
+              setClasses([filteredClass]);
+            }
+          } else {
+            // For admin or other roles, show all classes
+            setClasses(allClasses);
+          }
         }
       } catch (error) {
         console.error('Error loading classes:', error);
@@ -157,6 +207,21 @@ const ClassSectionsScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {userInfo?.role === 2 && userInfo?.classTeacherDetails && (
+          <View style={styles.teacherInfoBanner}>
+            <View style={styles.bannerIconContainer}>
+              <FontAwesome name="star" size={20} color="#3b82f6" />
+            </View>
+            <View style={styles.bannerTextContainer}>
+              <Text style={styles.bannerTitle}>Class Teacher</Text>
+              <Text style={styles.bannerText}>
+                Class {userInfo.classTeacherDetails.className} - 
+                Section {userInfo.classTeacherDetails.sectionName}
+              </Text>
+            </View>
+          </View>
+        )}
+
         <View style={styles.header}>
           <Text style={styles.subtitle}>Select a class to view sections</Text>
         </View>
@@ -333,6 +398,41 @@ const styles = StyleSheet.create({
   },
   dropdownDisabled: {
     opacity: 0.5,
+  },
+  teacherInfoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e0f2fe',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+    elevation: 2,
+    shadowColor: '#0369a1',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  bannerIconContainer: {
+    backgroundColor: '#bae6fd',
+    padding: 10,
+    borderRadius: 10,
+    marginRight: 12,
+  },
+  bannerTextContainer: {
+    flex: 1,
+  },
+  bannerTitle: {
+    fontSize: 14,
+    color: '#0369a1',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  bannerText: {
+    fontSize: 16,
+    color: '#0369a1',
+    fontWeight: '500',
   },
 });
 

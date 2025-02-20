@@ -3,7 +3,10 @@ export interface UserData {
     id: number;
     userId: string;
     schoolId: number;
-}
+    name: string;
+    role: number;
+    teacherId?: number;
+} 
 
 export interface Permission {
     id: number;
@@ -12,7 +15,7 @@ export interface Permission {
     navigation: string | null;
 }
 
-interface Section {
+export interface Section {
     id: number;
     name: string;
 }

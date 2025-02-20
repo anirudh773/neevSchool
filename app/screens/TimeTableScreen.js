@@ -25,13 +25,10 @@ const TimeTableManager = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  const [periods] = useState(['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th']);
-  const [days] = useState(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']);
-  const [teachers] = useState([
-    { id: 1, name: 'Mr. Smith', subject: 'Mathematics' },
-    { id: 2, name: 'Mrs. Johnson', subject: 'English' },
-    { id: 3, name: 'Ms. Davis', subject: 'Science' },
-  ]);
+  const [periods, setPeriods] = useState([]);
+  const [days, setDays] = useState([]);
+  const [teachers, setTeachers] = useState([]);
+  const [subjects, setSubjects] = useState([]);
 
   // UI state
   const [selectedClass, setSelectedClass] = useState(null);
@@ -41,6 +38,23 @@ const TimeTableManager = () => {
   const [timetable, setTimetable] = useState({});
   const [showTeacherModal, setShowTeacherModal] = useState(false);
   const [selectedCell, setSelectedCell] = useState(null);
+  const [selectedSubject, setSelectedSubject] = useState(null);
+  const [showSubjectList, setShowSubjectList] = useState(false);
+  const [masterData, setMasterData] = useState(null);
+
+  // Add this state for tracking subject per cell
+  const [cellSubjects, setCellSubjects] = useState({});
+
+  // Update the loading state to include timetable operations
+  const [isLoading, setIsLoading] = useState({
+    classes: true,
+    masterData: true,
+    timetable: false,
+    update: false
+  });
+
+  // Add new state for existing timetable
+  const [existingTimetable, setExistingTimetable] = useState([]);
 
   // Load classes data
   useEffect(() => {
@@ -49,7 +63,7 @@ const TimeTableManager = () => {
 
   const loadClassesData = async () => {
     try {
-      setLoading(true);
+      setIsLoading(prev => ({ ...prev, classes: true }));
       setError(null);
       const classesData = await SecureStore.getItemAsync('schoolClasses');
       if (classesData) {
@@ -60,7 +74,7 @@ const TimeTableManager = () => {
       console.error('Error loading classes:', error);
       setError('Failed to load class data. Please try again.');
     } finally {
-      setLoading(false);
+      setIsLoading(prev => ({ ...prev, classes: false }));
     }
   };
 
@@ -74,13 +88,126 @@ const TimeTableManager = () => {
     setShowTeacherModal(true);
   };
 
+  // Add function to fetch existing timetable
+  const fetchExistingTimetable = async (classId, sectionId) => {
+    try {
+      setIsLoading(prev => ({ ...prev, timetable: true }));
+      const response = await fetch(
+        `https://testcode-2.onrender.com/school/getSchoolTimetable?schoolId=1&classId=${classId}&sectionId=${sectionId}`
+      );
+      const result = await response.json();
+      
+      if (result.success) {
+        setExistingTimetable(result.data);
+        
+        // Convert existing timetable to our format
+        const newTimetable = {};
+        const newCellSubjects = {};
+        
+        result.data.forEach(entry => {
+          const key = `${entry.dayName}-${entry.slotName}-${entry.classId}-${entry.sectionId}`;
+          
+          // Set teacher
+          newTimetable[key] = {
+            id: entry.teacherId,
+            name: entry.teacherName
+          };
+          
+          // Set subject
+          newCellSubjects[key] = {
+            id: entry.subjectId,
+            name: entry.subjectName
+          };
+        });
+        
+        setTimetable(newTimetable);
+        setCellSubjects(newCellSubjects);
+      }
+    } catch (error) {
+      console.error('Error fetching timetable:', error);
+      setError('Failed to load existing timetable');
+    } finally {
+      setIsLoading(prev => ({ ...prev, timetable: false }));
+    }
+  };
+
+  // Update useEffect when class and section are selected
+  useEffect(() => {
+    if (selectedClass && selectedSection) {
+      fetchExistingTimetable(selectedClass.id, selectedSection.id);
+    }
+  }, [selectedClass, selectedSection]);
+
+  // Add function to update timetable entry
+  const updateTimetableEntry = async (entryId, teacherId, subjectId, timeSlotId, dayId) => {
+    try {
+      setIsLoading(prev => ({ ...prev, update: true }));
+      const response = await fetch(
+        `https://testcode-2.onrender.com/school/updateSchoolTimetable/${entryId}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            teacherId,
+            subjectId,
+            timeSlotId,
+            dayId,
+            isActive: true
+          })
+        }
+      );
+
+      const result = await response.json();
+      
+      if (result.success) {
+        await fetchExistingTimetable(selectedClass.id, selectedSection.id);
+        Alert.alert('Success', 'Timetable updated successfully');
+      } else {
+        throw new Error(result.message || 'Failed to update timetable');
+      }
+    } catch (error) {
+      console.error('Error updating timetable:', error);
+      Alert.alert('Error', error.message || 'Failed to update timetable');
+    } finally {
+      setIsLoading(prev => ({ ...prev, update: false }));
+    }
+  };
+
+  // Modify handleAssignment to use update API when entry exists
   const handleAssignment = (teacher) => {
     if (selectedCell && selectedClass && selectedSection) {
       const key = `${selectedCell.day}-${selectedCell.period}-${selectedClass.id}-${selectedSection.id}`;
-      setTimetable({
-        ...timetable,
-        [key]: teacher
-      });
+      const cellSubject = cellSubjects[key];
+      
+      if (!cellSubject) {
+        Alert.alert('Error', 'Please select a subject first');
+        return;
+      }
+
+      // Find existing entry
+      const existingEntry = existingTimetable.find(entry => 
+        entry.dayName === selectedCell.day && 
+        entry.slotName === selectedCell.period
+      );
+
+      if (existingEntry) {
+        // Update existing entry
+        updateTimetableEntry(
+          existingEntry.id,
+          teacher.id,
+          cellSubject.id,
+          existingEntry.period,
+          existingEntry.dayId
+        );
+      } else {
+        // Handle new entry with previous submit logic
+        setTimetable(prev => ({
+          ...prev,
+          [key]: teacher
+        }));
+      }
     }
     setShowTeacherModal(false);
     setSelectedCell(null);
@@ -109,39 +236,208 @@ const TimeTableManager = () => {
     );
   };
 
-  if (loading) {
-    return (
+  // Add this useEffect at the top of other effects
+  useEffect(() => {
+    fetchMasterData();
+  }, []);
+
+  const fetchMasterData = async () => {
+    try {
+      setIsLoading(prev => ({ ...prev, masterData: true }));
+      const response = await fetch('https://testcode-2.onrender.com/school/getSchudeleMasterData?schoolId=1');
+      const result = await response.json();
+      
+      if (result.success) {
+        setMasterData(result.data);
+        setTeachers(result.data.teachers);
+        setSubjects(result.data.subjects);
+        setPeriods(result.data.schoolPeriod);
+        setDays(result.data.schoolDays);
+      } else {
+        setError('Failed to load schedule data');
+      }
+    } catch (err) {
+      setError('Error connecting to server');
+      console.error('Error fetching schedule data:', err);
+    } finally {
+      setIsLoading(prev => ({ ...prev, masterData: false }));
+    }
+  };
+
+  // Add function to handle subject selection
+  const handleSubjectSelect = (subject) => {
+    if (selectedCell && selectedClass && selectedSection) {
+      const key = `${selectedCell.day}-${selectedCell.period}-${selectedClass.id}-${selectedSection.id}`;
+      setCellSubjects(prev => ({
+        ...prev,
+        [key]: subject
+      }));
+    }
+    setShowSubjectList(false);
+  };
+
+  // Add this function to handle opening subject modal
+  const handleSubjectButtonPress = (day, period) => {
+    setSelectedCell({ day, period });  // Set the selected cell before opening modal
+    setShowSubjectList(true);
+  };
+
+  // Add these helper functions after other state declarations
+  const getDayId = (dayName) => {
+    const day = days.find(d => d.dayName === dayName);
+    return day ? day.id : 1;
+  };
+
+  const getPeriodNumber = (periodName) => {
+    const period = periods.find(p => p.periodName === periodName);
+    return period ? period.id : 1;
+  };
+
+  // Add submit function
+  const handleSubmitSchedule = async () => {
+    if (!selectedClass || !selectedSection) {
+      Alert.alert('Error', 'Please select class and section first');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const scheduleData = [];
+
+      // Convert timetable data to API format
+      Object.entries(timetable).forEach(([key, teacher]) => {
+        const [day, period, classId, sectionId] = key.split('-');
+        const cellSubject = cellSubjects[key];
+
+        if (teacher && cellSubject) {
+          scheduleData.push({
+            period: getPeriodNumber(period),
+            teacherId: teacher.id,
+            subjectId: cellSubject.id,
+            dayId: getDayId(day)
+          });
+        }
+      });
+
+      if (scheduleData.length === 0) {
+        Alert.alert('Error', 'Please assign at least one schedule');
+        return;
+      }
+
+      const payload = {
+        classId: selectedClass.id,
+        sectionId: selectedSection.id,
+        schedule: scheduleData
+      };
+      console.log(payload, 'dsdsdsdsd')
+
+      const response = await fetch(
+        'https://testcode-2.onrender.com/school/submitSchoolSchudele?examScId=2',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'examScId': '2'
+          },
+          body: JSON.stringify(payload)
+        }
+      );
+
+      const result = await response.json();
+
+      if (result.success) {
+        Alert.alert('Success', 'Schedule saved successfully');
+        // Optionally clear the form or refresh data
+        setTimetable({});
+        setCellSubjects({});
+      } else {
+        throw new Error(result.message || 'Failed to save schedule');
+      }
+    } catch (error) {
+      console.error('Error saving schedule:', error);
+      Alert.alert('Error', error.message || 'Failed to save schedule. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Add this function to filter teachers based on selected subject
+  const getTeachersForSubject = (subjectId) => {
+    return teachers.filter(teacher => 
+      teacher.primarySubjectId === subjectId || 
+      teacher.substituteSubjectId === subjectId
+    );
+  };
+
+  // Add a loading overlay component
+  const LoadingOverlay = () => (
+    <View style={styles.loadingOverlay}>
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0000ff" />
-        <Text style={styles.loadingText}>Loading class data...</Text>
+        <ActivityIndicator size="large" color="#1A237E" />
+        <Text style={styles.loadingText}>Please wait...</Text>
       </View>
+    </View>
+  );
+
+  if (isLoading.classes || isLoading.masterData) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#1A237E" />
+          <Text style={styles.loadingText}>
+            {isLoading.masterData ? 'Loading schedule data...' : 'Loading class data...'}
+          </Text>
+          <Text style={styles.loadingSubText}>
+            Please wait while we prepare everything
+          </Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={loadClassesData}>
-          <Text style={styles.retryButtonText}>Retry</Text>
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <FontAwesome name="exclamation-circle" size={48} color="#FF5252" />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={fetchMasterData}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
+      {(isLoading.timetable || isLoading.update) && <LoadingOverlay />}
       <View style={styles.card}>
         <View style={styles.cardHeader}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
+            <FontAwesome name="arrow-left" size={20} color="#64748b" />
+          </TouchableOpacity>
           
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-        >
-          <FontAwesome name="arrow-left" size={20} color="#64748b" />
-        </TouchableOpacity>
-          <Text style={styles.cardTitle}>Timetable Management</Text>
-          <Text style={styles.cardSubtitle}>Manage class schedules and assignments</Text>
+          <View style={styles.headerContent}>
+            <Text style={styles.cardTitle}>Timetable Management</Text>
+            <Text style={styles.cardSubtitle}>Manage class schedules and assignments</Text>
+          </View>
+
+          {selectedClass && selectedSection && (
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleSubmitSchedule}
+            >
+              <FontAwesome name="save" size={18} color="#fff" />
+              <Text style={styles.saveButtonText}>Save</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.selectors}>
@@ -176,39 +472,92 @@ const TimeTableManager = () => {
                     <Text style={styles.headerText}>Day/Period</Text>
                   </View>
                   {periods.map(period => (
-                    <View key={period} style={styles.headerCell}>
-                      <Text style={styles.headerText}>{period}</Text>
+                    <View key={period.id} style={styles.headerCell}>
+                      <Text style={styles.headerText}>{period.periodName}</Text>
                     </View>
                   ))}
                 </View>
 
                 {days.map(day => (
-                  <View key={day} style={styles.row}>
+                  <View key={day.id} style={styles.row}>
                     <View style={[styles.cell, styles.firstColumn]}>
-                      <Text style={styles.dayText}>{day}</Text>
+                      <Text style={styles.dayText}>{day.dayName}</Text>
                     </View>
-                    {periods.map(period => {
-                      const key = `${day}-${period}-${selectedClass.id}-${selectedSection.id}`;
+                    {periods.map((period) => {
+                      const key = `${day.dayName}-${period.periodName}-${selectedClass?.id}-${selectedSection?.id}`;
                       const teacher = timetable[key];
+                      const cellSubject = cellSubjects[key];
+                      
                       return (
                         <TouchableOpacity
-                          key={period}
+                          key={period.id}
                           style={[styles.cell, styles.periodCell]}
-                          onPress={() => handleCellPress(day, period)}
+                          onPress={() => handleCellPress(day.dayName, period.periodName)}
                         >
                           {teacher ? (
                             <View style={styles.assignedCell}>
                               <Text style={styles.teacherName}>{teacher.name}</Text>
-                              <Text style={styles.subjectText}>{teacher.subject}</Text>
+                              <Text style={styles.subjectText}>{cellSubject?.name}</Text>
                               <TouchableOpacity
                                 style={styles.deleteButton}
-                                onPress={() => handleDelete(day, period)}
+                                onPress={() => {
+                                  handleDelete(day.dayName, period.periodName);
+                                  // Also clear the subject when deleting
+                                  const key = `${day.dayName}-${period.periodName}-${selectedClass?.id}-${selectedSection?.id}`;
+                                  setCellSubjects(prev => {
+                                    const newState = { ...prev };
+                                    delete newState[key];
+                                    return newState;
+                                  });
+                                }}
                               >
-                                <FontAwesome name="times" size={12} color="#FF4444" />
+                                <FontAwesome name="times" size={12} color="#FF5252" />
                               </TouchableOpacity>
                             </View>
                           ) : (
-                            <FontAwesome name="plus" size={14} color="#666" />
+                            <View style={styles.emptySlotContainer}>
+                              {!cellSubject ? (
+                                <TouchableOpacity 
+                                  style={styles.addButton}
+                                  onPress={() => handleSubjectButtonPress(day.dayName, period.periodName)}
+                                >
+                                  <FontAwesome name="plus" size={14} color="#1A237E" />
+                                  <Text style={styles.addButtonText}>Select Subject</Text>
+                                </TouchableOpacity>
+                              ) : (
+                                <View style={styles.assignmentContainer}>
+                                  <View style={styles.selectedSubjectContainer}>
+                                    <Text style={styles.selectedSubjectText}>{cellSubject.name}</Text>
+                                    <TouchableOpacity 
+                                      style={styles.changeButton}
+                                      onPress={() => handleSubjectButtonPress(day.dayName, period.periodName)}
+                                    >
+                                      <FontAwesome name="pencil" size={12} color="#666" />
+                                    </TouchableOpacity>
+                                  </View>
+                                  
+                                  {!teacher ? (
+                                    <TouchableOpacity 
+                                      style={styles.selectTeacherButton}
+                                      onPress={() => handleCellPress(day.dayName, period.periodName)}
+                                    >
+                                      <FontAwesome name="user-plus" size={14} color="#1A237E" />
+                                      <Text style={styles.selectTeacherText}>Select Teacher</Text>
+                                    </TouchableOpacity>
+                                  ) : (
+                                    <View style={styles.selectedTeacherContainer}>
+                                      <Text style={styles.selectedTeacherText}>{teacher.name}</Text>
+                                      <TouchableOpacity
+                                        style={styles.deleteButton}
+                                        onPress={() => handleDelete(day.dayName, period.periodName)}
+                                      >
+                                        <FontAwesome name="times" size={12} color="#FF5252" />
+                                      </TouchableOpacity>
+                                    </View>
+                                  )}
+                                </View>
+                              )}
+                            </View>
                           )}
                         </TouchableOpacity>
                       );
@@ -307,25 +656,86 @@ const TimeTableManager = () => {
           <View style={styles.pickerCard}>
             <Text style={styles.pickerTitle}>Assign Teacher</Text>
             {selectedCell && (
-              <Text style={styles.pickerSubtitle}>
-                {selectedCell.day}, {selectedCell.period} Period
-              </Text>
+              <>
+                <Text style={styles.pickerSubtitle}>
+                  {selectedCell.day}, {selectedCell.period} Period
+                </Text>
+                <Text style={styles.selectedSubjectTitle}>
+                  Subject: {cellSubjects[`${selectedCell.day}-${selectedCell.period}-${selectedClass?.id}-${selectedSection?.id}`]?.name}
+                </Text>
+              </>
             )}
             <ScrollView>
-              {teachers.map(teacher => (
+              {selectedCell && (
+                <>
+                  {getTeachersForSubject(
+                    cellSubjects[`${selectedCell.day}-${selectedCell.period}-${selectedClass?.id}-${selectedSection?.id}`]?.id
+                  ).length > 0 ? (
+                    getTeachersForSubject(
+                      cellSubjects[`${selectedCell.day}-${selectedCell.period}-${selectedClass?.id}-${selectedSection?.id}`]?.id
+                    ).map(teacher => (
+                      <TouchableOpacity
+                        key={teacher.id}
+                        style={styles.teacherItem}
+                        onPress={() => handleAssignment(teacher)}
+                      >
+                        <Text style={styles.teacherItemName}>{teacher.name}</Text>
+                        <Text style={styles.teacherItemSubject}>
+                          {teacher.primarySubjectId === cellSubjects[`${selectedCell.day}-${selectedCell.period}-${selectedClass?.id}-${selectedSection?.id}`]?.id 
+                            ? 'Primary Subject'
+                            : 'Substitute Subject'
+                          }
+                        </Text>
+                      </TouchableOpacity>
+                    ))
+                  ) : (
+                    <View style={styles.noTeachersContainer}>
+                      <FontAwesome name="info-circle" size={24} color="#666" />
+                      <Text style={styles.noTeachersText}>
+                        No teachers available for this subject
+                      </Text>
+                    </View>
+                  )}
+                </>
+              )}
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setShowTeacherModal(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Subject Selection Modal */}
+      <Modal
+        visible={showSubjectList}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowSubjectList(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.pickerCard}>
+            <Text style={styles.pickerTitle}>Select Subject</Text>
+            <ScrollView>
+              {subjects.map(subject => (
                 <TouchableOpacity
-                  key={teacher.id}
-                  style={styles.teacherItem}
-                  onPress={() => handleAssignment(teacher)}
+                  key={subject.id}
+                  style={styles.pickerItem}
+                  onPress={() => handleSubjectSelect(subject)}
                 >
-                  <Text style={styles.teacherItemName}>{teacher.name}</Text>
-                  <Text style={styles.teacherItemSubject}>{teacher.subject}</Text>
+                  <View style={styles.subjectRow}>
+                    <FontAwesome name={subject.icon} size={20} color="#1A237E" />
+                    <Text style={styles.pickerItemText}>{subject.name}</Text>
+                  </View>
                 </TouchableOpacity>
               ))}
             </ScrollView>
             <TouchableOpacity
               style={styles.cancelButton}
-              onPress={() => setShowTeacherModal(false)}
+              onPress={() => setShowSubjectList(false)}
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
@@ -361,6 +771,8 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   cardTitle: {
     fontSize: 24,
@@ -400,32 +812,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   headerCell: {
-    width: 110,
-    padding: 12,
+    width: 90,
+    padding: 8,
     backgroundColor: '#f8f9fa',
     borderWidth: 1,
     borderColor: '#e0e0e0',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   firstColumn: {
-    width: 120,
+    width: 100,
     backgroundColor: '#f8f9fa',
   },
   headerText: {
     fontWeight: '600',
     color: '#333',
-    fontSize: 13,
+    fontSize: 12,
+    textAlign: 'center',
   },
   row: {
     flexDirection: 'row',
   },
   cell: {
-    width: 110,
-    height: 80,
+    width: 90,
+    height: 70,
     borderWidth: 1,
     borderColor: '#e0e0e0',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 2,
   },
   periodCell: {
     backgroundColor: 'white',
@@ -519,6 +934,207 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     color: '#666',
     fontSize: 16,
+    fontWeight: '500',
+  },
+  emptySlotContainer: {
+    padding: 2,
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  assignmentContainer: {
+    width: '100%',
+    height: '100%',
+    padding: 2,
+    gap: 2,
+  },
+  selectedSubjectContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#E8F5E9',
+    padding: 3,
+    borderRadius: 4,
+    minHeight: 24,
+  },
+  selectedSubjectText: {
+    fontSize: 10,
+    color: '#2E7D32',
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'center',
+  },
+  changeButton: {
+    padding: 2,
+  },
+  selectTeacherButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    backgroundColor: '#E3F2FD',
+    padding: 3,
+    borderRadius: 4,
+    marginTop: 1,
+  },
+  selectTeacherText: {
+    fontSize: 10,
+    color: '#1565C0',
+    fontWeight: '500',
+  },
+  selectedTeacherContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#E3F2FD',
+    padding: 4,
+    borderRadius: 4,
+    marginTop: 2,
+  },
+  selectedTeacherText: {
+    fontSize: 12,
+    color: '#1565C0',
+    fontWeight: '500',
+    flex: 1,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 3,
+    paddingHorizontal: 4,
+    backgroundColor: '#F5F6F9',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    minWidth: 6,
+    justifyContent: 'center',
+  },
+  addButtonText: {
+    fontSize: 8,
+    fontWeight: '500',
+    color: '#1A237E',
+    textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#1A237E',
+  },
+  loadingSubText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    padding: 20,
+  },
+  errorText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#FF5252',
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: '#1A237E',
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  headerContent: {
+    flex: 1,
+  },
+  saveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 8,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  pickerSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
+  },
+  subjectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  selectedSubjectTitle: {
+    fontSize: 14,
+    color: '#2E7D32',
+    fontWeight: '600',
+    marginBottom: 16,
+    backgroundColor: '#E8F5E9',
+    padding: 8,
+    borderRadius: 4,
+  },
+  noTeachersContainer: {
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  noTeachersText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  loadingContainer: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  loadingText: {
+    marginTop: 10,
+    color: '#1A237E',
+    fontSize: 14,
     fontWeight: '500',
   },
 });
