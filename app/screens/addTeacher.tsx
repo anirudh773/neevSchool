@@ -41,6 +41,16 @@ interface Subjects {
   name: string;
 }
 
+const truncateFileName = (fileName: string, maxLength: number = 25) => {
+  if (fileName.length <= maxLength) return fileName;
+  
+  const extension = fileName.split('.').pop();
+  const nameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.'));
+  
+  const truncatedName = nameWithoutExt.substring(0, maxLength - 5); // -5 for "..." and some of extension
+  return `${truncatedName}...${extension}`;
+};
+
 const RegisterTeacher: React.FC = () => {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -52,6 +62,9 @@ const RegisterTeacher: React.FC = () => {
   const [docLoading, setDocLoading] = useState(false);
   const [qualifications, setQualifications] = useState<Qualifications[]>([]);
   const [subjects, setSubjects] = useState<Subjects[]>([]);
+  const [showResumeModal, setShowResumeModal] = useState(false);
+  const [selectedFileName, setSelectedFileName] = useState<string>('');
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   
   const [formData, setFormData] = useState<TeacherData>({
     name: '',
@@ -74,6 +87,19 @@ const RegisterTeacher: React.FC = () => {
   const loadExamMaterData = async () => {
     try {
       setLoading(true);
+      // Get user data for schoolId
+      const userDataStr = await SecureStore.getItemAsync('userData');
+      if (!userDataStr) {
+        throw new Error('User data not found');
+      }
+      
+      // Parse user data and get schoolId
+      const userData: { schoolId: number } = JSON.parse(userDataStr);
+      if (!userData.schoolId) {
+        throw new Error('School ID not found');
+      }
+
+      // Check if we already have cached data
       let [schoolQualification, schoolSubject] = await Promise.all([
         SecureStore.getItemAsync('qualification'),
         SecureStore.getItemAsync('subjectBySchool')
@@ -89,20 +115,29 @@ const RegisterTeacher: React.FC = () => {
         }
       }
 
-      const response = await fetch(`https://testcode-2.onrender.com/school/getExamMasterData?schoolId=1`, {
-        headers: {
-          'Content-Type': 'application/json'
+      // If no cached data, fetch from API
+      const response = await fetch(
+        `https://testcode-2.onrender.com/school/getExamMasterData?schoolId=${userData.schoolId}`,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
         }
-      });
+      );
       const data = await response.json();
 
-      await Promise.all([
-        SecureStore.setItemAsync('qualification', JSON.stringify(data.data.qualification)),
-        SecureStore.setItemAsync('subjectBySchool', JSON.stringify(data.data.subjectBySchool))
-      ]);
-      setQualifications(data.data.qualification);
-      setSubjects(data.data.subjectBySchool);
+      if (data.success) {
+        await Promise.all([
+          SecureStore.setItemAsync('qualification', JSON.stringify(data.data.qualification)),
+          SecureStore.setItemAsync('subjectBySchool', JSON.stringify(data.data.subjectBySchool))
+        ]);
+        setQualifications(data.data.qualification);
+        setSubjects(data.data.subjectBySchool);
+      } else {
+        throw new Error(data.message || 'Failed to load master data');
+      }
     } catch (err) {
+      console.error('Error loading master data:', err);
       Alert.alert('Error', 'Failed to load master data');
     } finally {
       setLoading(false);
@@ -142,7 +177,9 @@ const RegisterTeacher: React.FC = () => {
       const result = await getDocumentAsync(options);
   
       if (!result.canceled && result.assets?.[0]) {
-        setDocLoading(true);
+        setShowResumeModal(true);
+        setSelectedFileName(result.assets[0].name);
+        setUploadStatus('uploading');
         
         // Get the file name and extension
         const uri = result.assets[0].uri;
@@ -165,12 +202,18 @@ const RegisterTeacher: React.FC = () => {
         
         // Update form data with the download URL
         handleInputChange('resumeUrl', downloadUrl);
+        setUploadStatus('success');
+        
+        // Close modal after 2 seconds on success
+        setTimeout(() => {
+          setShowResumeModal(false);
+          setUploadStatus('idle');
+        }, 2000);
       }
     } catch (error) {
       console.error('Upload error:', error);
+      setUploadStatus('error');
       Alert.alert('Error', 'Failed to upload resume. Please try again.');
-    } finally {
-      setDocLoading(false);
     }
   };
 
@@ -179,6 +222,12 @@ const RegisterTeacher: React.FC = () => {
     
     setIsLoading(true);
     try {
+      const userDataStr = await SecureStore.getItemAsync('userData');
+      if (!userDataStr) {
+        throw new Error('User data not found');
+      }
+      const userData = JSON.parse(userDataStr);
+
       const date = new Date(formData.joiningDate);
       const formattedDate = date.toLocaleDateString('en-GB', {
         day: '2-digit',
@@ -188,7 +237,8 @@ const RegisterTeacher: React.FC = () => {
 
       const dataToSubmit = {
         ...formData,
-        joiningDate: formattedDate
+        joiningDate: formattedDate,
+        schoolId: userData.schoolId // Use dynamic schoolId here
       };
 
       const response = await fetch('https://testcode-2.onrender.com/school/addTeacher', {
@@ -233,19 +283,27 @@ const RegisterTeacher: React.FC = () => {
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>{title}</Text>
-          {subjects.map(subject => (
-            <TouchableOpacity
-              key={subject.id}
-              style={styles.modalItem}
-              onPress={() => {
-                onSelect(subject.id);
-                onClose();
-              }}
-            >
-              <Text>{subject.name}</Text>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{title}</Text>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <FontAwesome name="times" size={24} color="#666" />
             </TouchableOpacity>
-          ))}
+          </View>
+          <ScrollView style={styles.modalScroll}>
+            {subjects.map(subject => (
+              <TouchableOpacity
+                key={subject.id}
+                style={styles.modalItem}
+                onPress={() => {
+                  onSelect(subject.id);
+                  onClose();
+                }}
+              >
+                <Text style={styles.modalItemText}>{subject.name}</Text>
+                <FontAwesome name="chevron-right" size={16} color="#666" />
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -260,19 +318,73 @@ const RegisterTeacher: React.FC = () => {
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Select Qualification</Text>
-          {qualifications.map(qualification => (
-            <TouchableOpacity
-              key={qualification.id}
-              style={styles.modalItem}
-              onPress={() => {
-                handleInputChange('qualifications', qualification.id);
-                setShowQualificationPicker(false);
-              }}
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Qualification</Text>
+            <TouchableOpacity 
+              onPress={() => setShowQualificationPicker(false)} 
+              style={styles.closeButton}
             >
-              <Text>{qualification.name}</Text>
+              <FontAwesome name="times" size={24} color="#666" />
             </TouchableOpacity>
-          ))}
+          </View>
+          <ScrollView style={styles.modalScroll}>
+            {qualifications.map(qualification => (
+              <TouchableOpacity
+                key={qualification.id}
+                style={styles.modalItem}
+                onPress={() => {
+                  handleInputChange('qualifications', qualification.id);
+                  setShowQualificationPicker(false);
+                }}
+              >
+                <Text style={styles.modalItemText}>{qualification.name}</Text>
+                <FontAwesome name="chevron-right" size={16} color="#666" />
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const ResumeUploadModal = () => (
+    <Modal
+      visible={showResumeModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowResumeModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.resumeModalContent}>
+          <View style={styles.resumeModalHeader}>
+            <Text style={styles.modalTitle}>Resume Upload</Text>
+            {uploadStatus !== 'uploading' && (
+              <TouchableOpacity 
+                onPress={() => setShowResumeModal(false)}
+                style={styles.closeButton}
+              >
+                <FontAwesome name="times" size={24} color="#666" />
+              </TouchableOpacity>
+            )}
+          </View>
+          
+          <View style={styles.resumeModalBody}>
+            <FontAwesome 
+              name={uploadStatus === 'success' ? 'check-circle' : 'file-pdf-o'} 
+              size={40} 
+              color={uploadStatus === 'success' ? '#4CAF50' : '#666'} 
+            />
+            <Text style={styles.fileName}>{selectedFileName}</Text>
+            {uploadStatus === 'uploading' && (
+              <ActivityIndicator size="large" color="#007AFF" style={styles.uploadingIndicator} />
+            )}
+            {uploadStatus === 'success' && (
+              <Text style={styles.successText}>Upload Successful!</Text>
+            )}
+            {uploadStatus === 'error' && (
+              <Text style={styles.errorText}>Upload Failed. Please try again.</Text>
+            )}
+          </View>
         </View>
       </View>
     </Modal>
@@ -298,13 +410,13 @@ const RegisterTeacher: React.FC = () => {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            <TouchableOpacity 
+            {/* <TouchableOpacity 
               onPress={() => router.push('/(tab)')}
               style={styles.backButton}
             >
               <FontAwesome name="arrow-left" size={24} color="#000" />
-            </TouchableOpacity>
-            <Text style={styles.headerText}>Teacher Registration</Text>
+            </TouchableOpacity> */}
+            {/* <Text style={styles.headerText}>Teacher Registration</Text> */}
 
             <TouchableOpacity onPress={() => router.push('/screens/listTeacherss')}>
               <FontAwesome name="list" size={24} color="#000" />
@@ -368,38 +480,84 @@ const RegisterTeacher: React.FC = () => {
             />
           )}
 
-          <TouchableOpacity onPress={() => setShowPrimarySubjectPicker(true)}>
+          <TouchableOpacity 
+            onPress={() => setShowPrimarySubjectPicker(true)}
+            style={styles.dropdownContainer}
+          >
             <TextInput
               label="Primary Subject"
               value={subjects.find(s => s.id === formData.primarySubjectId)?.name}
               editable={false}
               style={styles.input}
               mode="outlined"
-              right={<TextInput.Icon icon="chevron-down" />}
+              right={
+                <TextInput.Icon 
+                  icon="chevron-down" 
+                  onPress={() => setShowPrimarySubjectPicker(true)}
+                />
+              }
             />
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => setShowSubstituteSubjectPicker(true)}>
+          <TouchableOpacity 
+            onPress={() => setShowSubstituteSubjectPicker(true)}
+            style={styles.dropdownContainer}
+          >
             <TextInput
               label="Substitute Subject"
               value={subjects.find(s => s.id === formData.substituteSubjectId)?.name}
               editable={false}
               style={styles.input}
               mode="outlined"
-              right={<TextInput.Icon icon="chevron-down" />}
+              right={
+                <TextInput.Icon 
+                  icon="chevron-down" 
+                  onPress={() => setShowSubstituteSubjectPicker(true)}
+                />
+              }
             />
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => setShowQualificationPicker(true)}>
+          <TouchableOpacity 
+            onPress={() => setShowQualificationPicker(true)}
+            style={styles.dropdownContainer}
+          >
             <TextInput
               label="Teacher highest qualification"
               value={qualifications.find(s => s.id === formData.qualifications)?.name}
               editable={false}
               style={styles.input}
               mode="outlined"
-              right={<TextInput.Icon icon="chevron-down" />}
+              right={
+                <TextInput.Icon 
+                  icon="chevron-down" 
+                  onPress={() => setShowQualificationPicker(true)}
+                />
+              }
             />
           </TouchableOpacity>
+
+          {formData.resumeUrl && (
+            <View style={styles.selectedFileContainer}>
+              <View style={styles.selectedFileContent}>
+                <FontAwesome name="file-pdf-o" size={20} color="#666" />
+                <View style={styles.fileNameContainer}>
+                  <Text style={styles.selectedFileName} numberOfLines={1}>
+                    {truncateFileName(selectedFileName)}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity 
+                style={styles.removeFileButton}
+                onPress={() => {
+                  handleInputChange('resumeUrl', '');
+                  setSelectedFileName('');
+                }}
+              >
+                <FontAwesome name="times-circle" size={20} color="#FF4444" />
+              </TouchableOpacity>
+            </View>
+          )}
 
           <TouchableOpacity 
             style={styles.uploadButton}
@@ -410,7 +568,9 @@ const RegisterTeacher: React.FC = () => {
             ) : (
               <>
                <FontAwesome name="upload" size={20} color="#fff" />
-               <Text style={styles.uploadText}>Upload Resume</Text>
+               <Text style={styles.uploadText}>
+                 {formData.resumeUrl ? 'Change Resume' : 'Upload Resume'}
+               </Text>
               </>
             )}
           </TouchableOpacity>
@@ -444,6 +604,7 @@ const RegisterTeacher: React.FC = () => {
       />
 
       <QualificationPickerModal />
+      <ResumeUploadModal />
     </SafeAreaView>
   );
 };
@@ -461,7 +622,6 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   header: {
-    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 24,
   },
@@ -482,7 +642,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#666',
+    backgroundColor: '#555',
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
@@ -517,19 +677,46 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    padding: 16,
     maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 16,
-    textAlign: 'center',
+    color: '#333',
+  },
+  closeButton: {
+    padding: 8,
+  },
+  modalScroll: {
+    maxHeight: '70%',
   },
   modalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+    backgroundColor: '#fff',
+  },
+  modalItemText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  selectedItem: {
+    backgroundColor: '#f0f9ff',
+  },
+  selectedItemText: {
+    color: '#007AFF',
+    fontWeight: '500',
   },
   loadingContainer: {
     flex: 1,
@@ -544,7 +731,88 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 18,
     fontWeight: '500',
-  }
+  },
+  dropdownContainer: {
+    marginBottom: 16,
+  },
+  resumeModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    width: '90%',
+    maxWidth: 400,
+    alignSelf: 'center',
+    marginTop: 'auto',
+    marginBottom: 'auto',
+  },
+  resumeModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    paddingBottom: 10,
+  },
+  resumeModalBody: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  fileName: {
+    fontSize: 16,
+    color: '#333',
+    marginTop: 12,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  uploadingIndicator: {
+    marginTop: 16,
+  },
+  successText: {
+    color: '#4CAF50',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 12,
+  },
+  errorText: {
+    color: '#F44336',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 12,
+  },
+  selectedFileContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F5F5F5',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    maxWidth: '100%',
+  },
+  selectedFileContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  fileNameContainer: {
+    flex: 1,
+    marginLeft: 8,
+    marginRight: 8,
+  },
+  selectedFileName: {
+    fontSize: 14,
+    color: '#333',
+    width: '100%',
+  },
+  removeFileButton: {
+    padding: 4,
+    width: 28,
+    alignItems: 'center',
+  },
 });
 
 export default RegisterTeacher;

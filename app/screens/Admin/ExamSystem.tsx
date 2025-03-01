@@ -1,11 +1,12 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal, Alert } from 'react-native';
 import { Card, Button, Surface, ActivityIndicator } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { Animated } from 'react-native';
+import ExamScheduleCard from '@/components/exam/ExamScheduleCard';
 
 interface ExamStats {
   ongoingExams: number;
@@ -21,14 +22,16 @@ interface QuickAction {
 }
 
 interface Schedule {
-  id: number,
-  subject_id: number,
-  subject_name: string,
-  duration_minutes: number,
-  max_marks: number,
-  passing_marks: number,
-  is_marks_submitted: boolean,
-  class_id: number
+  id: number;
+  subject_id: number;
+  subject_name: string;
+  exam_datetime: string;
+  duration_minutes: number;
+  max_marks: number;
+  passing_marks: number;
+  is_marks_submitted: boolean;
+  class_id: number;
+  section_id: number;
 }
 
 interface Exam {
@@ -38,7 +41,7 @@ interface Exam {
   status: 'Ongoing' | 'Upcoming' | 'Completed';
   participation: string;
   class: string;
-  schedules: Schedule
+  schedules: Schedule[];
 }
 
 interface Class {
@@ -65,6 +68,7 @@ const ExamDashboardScreen: React.FC = () => {
   const [examStats, setExamStats] = useState<ExamStats>()
   const [recentExams, setRecentExams] = useState<Exam[]>([])
   const [allRecentExams, setallRecentExams] = useState<Exam[]>([])
+  const [recentExamsLoading, setRecentExamsLoading] = useState<boolean>(false);
 
   const quickActions: QuickAction[] = [
     { icon: 'add-circle', label: 'New Exam', color: '#4CAF50' },
@@ -77,16 +81,11 @@ const ExamDashboardScreen: React.FC = () => {
     useCallback(() => {
       loadClassesData();
       loadExamMaterData();
-    }, [])
+      if (selectedClass && selectedSection) {
+        fetchRecentExams();
+      }
+    }, [selectedClass, selectedSection])
   );
-
-  // Effect to fetch attendance when section is selected
-  useEffect(() => {
-    if (selectedClass && allRecentExams.length > 0) {
-      let recentExamClassWise = allRecentExams.filter(obj => obj.class == selectedClass.name)
-      setRecentExams(recentExamClassWise)
-    }
-  }, [selectedClass]);
 
   const loadClassesData = async () => {
     try {
@@ -116,42 +115,79 @@ const ExamDashboardScreen: React.FC = () => {
   const loadExamMaterData = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`https://testcode-2.onrender.com/school/getExamMasterData?schoolId=1`, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      const data = await response.json();
-
-      // Reset these states to force a refresh
-      setExamStats(data.data.examStats);
-      setallRecentExams(data.data.recentExam);
+      const userDataStr = await SecureStore.getItemAsync('userData');
+      if (!userDataStr) {
+        throw new Error('User data not found');
+      }
       
-      // If a class is already selected, filter exams for that class
-
-
-      console.log(selectedClass)
-      if (selectedClass && data.data.recentExam.length>0) {
-        const recentExamClassWise = data.data.recentExam.filter(
-          obj => obj.class == selectedClass.name
-        );
-        setRecentExams(recentExamClassWise);
+      // Parse user data and get schoolId
+      const userData: { schoolId: number } = JSON.parse(userDataStr);
+      if (!userData.schoolId) {
+        throw new Error('School ID not found');
       }
 
-      // set 2 master data for next page 
-      await Promise.all([
-        SecureStore.setItemAsync('subjectBySchool', JSON.stringify(data.data.subjectBySchool)),
-        SecureStore.setItemAsync('examType', JSON.stringify(data.data.examType))
-      ]);
-      // setExamStats(data.data.examStats);
-      // setallRecentExams(data.data.recentExam);
-      setLoading(false);
+      const response = await fetch(
+        `https://testcode-2.onrender.com/school/getExamMasterData?schoolId=${userData.schoolId}`,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      const data = await response.json();
+
+      if (data.success) {
+        // Only set exam stats and master data
+        setExamStats(data.data.examStats);
+
+        // Set master data for next page 
+        await Promise.all([
+          SecureStore.setItemAsync('subjectBySchool', JSON.stringify(data.data.subjectBySchool)),
+          SecureStore.setItemAsync('examType', JSON.stringify(data.data.examType))
+        ]);
+      } else {
+        throw new Error(data.message || 'Failed to load exam data');
+      }
+
     } catch (err) {
+      console.error('Error loading exam data:', err);
+      Alert.alert('Error', 'Failed to load exam data');
     } finally {
       setLoading(false);
     }
   };
 
+  const fetchRecentExams = async () => {
+    try {
+      if (!selectedClass || !selectedSection) return;
+      
+      setRecentExamsLoading(true);
+      const userDataStr = await SecureStore.getItemAsync('userData');
+      if (!userDataStr) {
+        throw new Error('User data not found');
+      }
+      const userData = JSON.parse(userDataStr);
+
+      const response = await fetch(
+        `https://testcode-2.onrender.com/school/getRecentExam?schoolId=${userData.schoolId}&classId=${selectedClass.id}&sectionId=${selectedSection.id}`,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const data = await response.json();
+      if (data.success) {
+        setRecentExams(data.data.recentExam);
+      }
+    } catch (error) {
+      console.error('Error fetching recent exams:', error);
+      Alert.alert('Error', 'Failed to fetch recent exams');
+    } finally {
+      setRecentExamsLoading(false);
+    }
+  };
 
   const getStatusColor = (status: Exam['status']): string => {
     switch (status) {
@@ -330,107 +366,27 @@ const ExamDashboardScreen: React.FC = () => {
             </View>
 
             <Text style={styles.sectionTitle}>Recent Exams</Text>
-            {recentExams && recentExams.map((exam) => {
-              // Initialize animation value if it doesn't exist
-              if (!animationValues[exam.id]) {
-                animationValues[exam.id] = new Animated.Value(0);
-              }
-
-              const arrowRotation = animationValues[exam.id].interpolate({
-                inputRange: [0, 1],
-                outputRange: ['0deg', '180deg']
-              });
-
-              const maxHeight = animationValues[exam.id].interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, 500]
-              });
-
-              return (
-                <Card key={exam.id} style={styles.examCard}>
-                  <Card.Content>
-                    <View style={styles.examHeader}>
-                      <View>
-                        <Text style={styles.examName}>{exam.name}</Text>
-                        <Text style={styles.examClass}>{`Class ${exam.class}`}</Text>
-                      </View>
-                      <View style={[styles.statusBadge, { backgroundColor: getStatusColor(exam.status) }]}>
-                        <Text style={styles.statusText}>{exam.status}</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.examDetails}>
-                      <View style={styles.detailItem}>
-                        <Ionicons name="calendar-outline" size={16} color="#666" />
-                        <Text style={styles.detailText}>{exam.date}</Text>
-                      </View>
-                      <View style={styles.detailItem}>
-                        <Ionicons name="people-outline" size={16} color="#666" />
-                        <Text style={styles.detailText}>Participation: {exam.participation}</Text>
-                      </View>
-                    </View>
-
-                    <TouchableOpacity
-                      style={styles.collapsibleHeader}
-                      onPress={() => toggleSchedule(exam.id)}
-                    >
-                      <Text style={styles.subjectsTitle}>Subjects</Text>
-                      <Animated.View style={{ transform: [{ rotate: arrowRotation }] }}>
-                        <Ionicons name="chevron-down" size={24} color="#666" />
-                      </Animated.View>
-                    </TouchableOpacity>
-
-                    <Animated.View style={[styles.subjectsList, { maxHeight, overflow: 'hidden' }]}>
-                      {exam.schedules && exam.schedules.map((subject) => (
-                        <View key={subject.id} style={styles.subjectItem}>
-                          <View style={styles.subjectHeader}>
-                            <Text style={styles.subjectName}>{subject.subject_name}</Text>
-                            <View style={[
-                              styles.submissionStatus,
-                              { backgroundColor: subject.is_marks_submitted ? '#e0f2e9' : '#fff3e0' }
-                            ]}>
-                              <Text style={[
-                                styles.submissionText,
-                                { color: subject.is_marks_submitted ? '#2e7d32' : '#ed6c02' }
-                              ]}>
-                                {subject.is_marks_submitted ? 'Marks Submitted' : 'Pending'}
-                              </Text>
-                            </View>
-                          </View>
-                          <View style={styles.subjectDetails}>
-                            <Text style={styles.subjectInfo}>
-                              Duration: {subject.duration_minutes} mins | Max Marks: {subject.max_marks} | Passing: {subject.passing_marks}
-                            </Text>
-                            <Text style={styles.examDateTime}>
-                              Date: {new Date(subject.exam_datetime).toLocaleDateString()}
-                            </Text>
-                          </View>
-                        </View>
-                      ))}
-                    </Animated.View>
-
-                    <View style={styles.cardActions}>
-                      <Button
-                        mode="contained"
-                        style={styles.actionBtn}
-                        labelStyle={styles.actionBtnLabel}
-                        onPress={() => handleViewDetails(exam)}
-                      >
-                        Feed marks
-                      </Button>
-                      <Button
-                        mode="outlined"
-                        style={styles.actionBtn}
-                        labelStyle={[styles.actionBtnLabel, { color: '#666' }]}
-                        onPress={() => handleEditExam(exam.id)}
-                      >
-                        Feedback
-                      </Button>
-                    </View>
-                  </Card.Content>
-                </Card>
-              );
-            })}
+            {recentExamsLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#3b82f6" />
+              </View>
+            ) : recentExams.length > 0 ? (
+              recentExams.map((exam) => (
+                <ExamScheduleCard
+                  key={exam.id}
+                  exam={exam}
+                  isExpanded={expandedExams[exam.id]}
+                  animationValue={animationValues[exam.id] || new Animated.Value(0)}
+                  onToggle={() => toggleSchedule(exam.id)}
+                  onViewDetails={() => handleViewDetails(exam)}
+                  onEdit={() => handleEditExam(exam.id)}
+                />
+              ))
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>No exams found</Text>
+              </View>
+            )}
           </ScrollView>
         ) : (
           <View style={styles.emptyState}>
@@ -684,12 +640,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   emptyState: {
-    padding: 24,
+    padding: 20,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#64748b',
+    color: '#666',
     textAlign: 'center',
   },
   modalContainer: {
@@ -736,10 +693,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
+    padding: 20,
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    justifyContent: 'center',
   },
   subjectsList: {
     marginTop: 12,

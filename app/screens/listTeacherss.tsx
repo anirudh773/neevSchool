@@ -39,15 +39,6 @@ type Teacher = {
     isActive: boolean;
 };
 
-type SubjectId = '1' | '2' | '3' | '4';
-
-const subjects: Record<SubjectId, string> = {
-    '1': 'Mathematics',
-    '2': 'Science',
-    '3': 'English',
-    '4': 'Social Studies'
-};
-
 const formatClassSection = (className: string, sectionName: string): string => 
     `${className}-Section-${sectionName}`;
 
@@ -55,9 +46,29 @@ interface TeacherCardProps {
     teacher: Teacher;
     onEdit: (teacher: Teacher) => void;
     onDelete: (teacher: Teacher) => void;
+    subjects: Subject[];
+    classes: Class[];
 }
 
-const TeacherCard: React.FC<TeacherCardProps> = ({ teacher, onEdit, onDelete }) => (
+const getSubjectName = (subjectId: string, subjects: Subject[] = []) => {
+    if (!subjects?.length) return 'Loading...';
+    const subject = subjects.find(s => s.id.toString() == subjectId);
+    return subject ? subject.name : 'Unknown Subject';
+};
+
+const getClassSectionName = (sectionId: number | undefined, classes: Class[]): string => {
+    if (!sectionId || !classes?.length) return 'Not Assigned';
+    
+    for (const classItem of classes) {
+        const section = classItem.sections.find(s => s.id === sectionId);
+        if (section) {
+            return `Class ${classItem.name} - Section ${section.name}`;
+        }
+    }
+    return 'Not Assigned';
+};
+
+const TeacherCard: React.FC<TeacherCardProps> = ({ teacher, onEdit, onDelete, subjects, classes }) => (
     <Surface style={styles.teacherCard}>
         <View style={styles.cardHeader}>
             <View style={styles.teacherInfo}>
@@ -92,7 +103,7 @@ const TeacherCard: React.FC<TeacherCardProps> = ({ teacher, onEdit, onDelete }) 
                     <FontAwesome name="book" size={14} color="#5C6BC0" />
                 </View>
                 <Text style={styles.infoText}>
-                    Primary: {subjects[teacher.primarySubjectId as SubjectId] || 'Unknown Subject'}
+                    Primary: {getSubjectName(teacher.primarySubjectId, subjects)}
                 </Text>
             </View>
 
@@ -101,7 +112,7 @@ const TeacherCard: React.FC<TeacherCardProps> = ({ teacher, onEdit, onDelete }) 
                     <FontAwesome name="book" size={14} color="#5C6BC0" />
                 </View>
                 <Text style={styles.infoText}>
-                    Substitute Subject: {subjects[teacher.substituteSubjectId as SubjectId] || 'N/A'}
+                    Substitute: {getSubjectName(teacher.substituteSubjectId, subjects)}
                 </Text>
             </View>
             <View style={styles.infoRow}>
@@ -109,7 +120,7 @@ const TeacherCard: React.FC<TeacherCardProps> = ({ teacher, onEdit, onDelete }) 
                     <FontAwesome name="graduation-cap" size={14} color="#5C6BC0" />
                 </View>
                 <Text style={styles.infoText}>
-                    Class Teacher Of: {subjects[teacher.substituteSubjectId as SubjectId] || 'N/A'}
+                    Class Teacher Of: {getClassSectionName(Number(teacher.classTeacherOf), classes)}
                 </Text>
             </View>
         </View>
@@ -196,7 +207,13 @@ interface EditModalProps {
         sectionId: number;
         sectionName: string;
     } | null;
+    setSelectedClassSection: (value: {
+        className: string;
+        sectionId: number;
+        sectionName: string;
+    } | null) => void;
     setShowClassSelect: (show: boolean) => void;
+    classes: Class[];
 }
 
 interface TeacherUpdateData {
@@ -213,19 +230,36 @@ interface UpdateData {
     classTeacherOf?: number;
 }
 
+const getClassSectionDetails = (sectionId: string | number | undefined, classes: Class[]) => {
+    if (!sectionId) return null;
+    
+    for (const classItem of classes) {
+        const section = classItem.sections.find(s => s.id === Number(sectionId));
+        if (section) {
+            return {
+                className: classItem.name,
+                sectionId: section.id,
+                sectionName: section.name
+            };
+        }
+    }
+    return null;
+};
+
 const EditModal: React.FC<EditModalProps> = ({ 
     visible, 
     onClose, 
     onUpdate, 
-    teacher, 
+    teacher,
     selectedClassSection,
-    setShowClassSelect 
+    setSelectedClassSection,
+    setShowClassSelect,
+    classes
 }) => {
     const [formData, setFormData] = useState<TeacherUpdateData>({
         name: '',
         email: '',
-        primarySubjectId: '',
-        substituteSubjectId: '',
+        classTeacherOf: undefined
     });
 
     useEffect(() => {
@@ -233,9 +267,17 @@ const EditModal: React.FC<EditModalProps> = ({
             setFormData({
                 name: teacher.name,
                 email: teacher.email,
-                primarySubjectId: teacher.primarySubjectId,
-                substituteSubjectId: teacher.substituteSubjectId,
+                classTeacherOf: teacher.classTeacherOf
             });
+            
+            if (teacher.classTeacherOf) {
+                const classSection = getClassSectionDetails(teacher.classTeacherOf, classes);
+                if (classSection) {
+                    setSelectedClassSection(classSection);
+                }
+            } else {
+                setSelectedClassSection(null);
+            }
         }
     }, [teacher]);
 
@@ -247,7 +289,7 @@ const EditModal: React.FC<EditModalProps> = ({
         
         const updateData = {
             ...formData,
-            classTeacherOf: selectedClassSection?.sectionId
+            classTeacherOf: selectedClassSection?.sectionId.toString()
         };
         
         onUpdate(updateData);
@@ -256,8 +298,8 @@ const EditModal: React.FC<EditModalProps> = ({
     return (
         <Modal
             visible={visible}
+            transparent
             animationType="slide"
-            transparent={true}
             onRequestClose={onClose}
         >
             <KeyboardAvoidingView
@@ -308,13 +350,18 @@ const EditModal: React.FC<EditModalProps> = ({
                                 style={styles.classSelectField}
                                 onPress={() => setShowClassSelect(true)}
                             >
-                                <FontAwesome name="users" size={18} color="#5C6BC0" style={styles.selectIcon} />
+                                <FontAwesome 
+                                    name="graduation-cap" 
+                                    size={20} 
+                                    color="#666" 
+                                    style={styles.selectIcon}
+                                />
                                 <Text style={styles.classSelectText}>
-                                    {selectedClassSection ?
-                                        formatClassSection(selectedClassSection.className, selectedClassSection.sectionName) :
-                                        'Select Class'}
+                                    {selectedClassSection 
+                                        ? `Class ${selectedClassSection.className} - Section ${selectedClassSection.sectionName}`
+                                        : 'Select Class & Section'}
                                 </Text>
-                                <FontAwesome name="chevron-down" size={14} color="#666" />
+                                <FontAwesome name="chevron-right" size={16} color="#666" />
                             </TouchableOpacity>
                         </View>
                     </ScrollView>
@@ -381,21 +428,28 @@ const TeacherListing: React.FC = () => {
         sectionName: string;
     } | null>(null);
     const [subjects, setSubjects] = useState<Subject[]>([]);
+    const [schoolId, setSchoolId] = useState<number>(1);
 
-    const handleViewResume = (resumeUrl?: string) => {
-        if (resumeUrl) {
-            Linking.openURL(resumeUrl).catch(() => {
-                Alert.alert('Error', 'Unable to open resume');
-            });
-        } else {
-            Alert.alert('Info', 'No resume available for this teacher');
-        }
-    };
+    useEffect(() => {
+        const initializeUserData = async () => {
+            try {
+                const userDataStr = await SecureStore.getItemAsync('userData');
+                if (userDataStr) {
+                    const userData = JSON.parse(userDataStr);
+                    setSchoolId(userData.schoolId);
+                }
+            } catch (error) {
+                console.error('Error getting user data:', error);
+            }
+        };
+        
+        initializeUserData();
+    }, []);
 
     const fetchTeachers = async () => {
         try {
             setLoading(true);
-            const response = await fetch('https://testcode-2.onrender.com/school/getTeachersBySchoolId?schoolId=1');
+            const response = await fetch(`https://testcode-2.onrender.com/school/getTeachersBySchoolId?schoolId=${schoolId}`);
             const data = await response.json();
             if (data.success) {
                 setTeachers(data.data);
@@ -408,6 +462,29 @@ const TeacherListing: React.FC = () => {
         }
     };
 
+    const loadSubjects = async () => {
+        try {
+            const storedSubjects = await SecureStore.getItemAsync('subjectBySchool');
+            if (storedSubjects) {
+                const parsedSubjects = JSON.parse(storedSubjects);
+                setSubjects(parsedSubjects);
+                return parsedSubjects;
+            }
+
+            const response = await fetch(`https://testcode-2.onrender.com/school/getExamMasterData?schoolId=${schoolId}`);
+            const data = await response.json();
+            if (data.success) {
+                const newSubjects = data.data.subjectBySchool;
+                setSubjects(newSubjects);
+                await SecureStore.setItemAsync('subjectBySchool', JSON.stringify(newSubjects));
+                return newSubjects;
+            }
+            return [];
+        } catch (error) {
+            return [];
+        }
+    };
+
     useEffect(() => {
         const loadData = async () => {
             try {
@@ -416,21 +493,22 @@ const TeacherListing: React.FC = () => {
                     setClasses(JSON.parse(classesData));
                 }
 
-                const response = await fetch('https://testcode-2.onrender.com/school/getSchudeleMasterData?schoolId=1');
+                const response = await fetch(`https://testcode-2.onrender.com/school/getSchudeleMasterData?schoolId=${schoolId}`);
                 const result = await response.json();
                 
                 if (result.success) {
-                    setSubjects(result.data.subjects);
-                    await SecureStore.setItemAsync('subjects', JSON.stringify(result.data.subjects));
+                    await loadSubjects();
                 }
             } catch (error) {
                 console.error('Error loading data:', error);
             }
         };
 
-        loadData();
-        fetchTeachers();
-    }, []);
+        if (schoolId) {
+            loadData();
+            fetchTeachers();
+        }
+    }, [schoolId]);
 
     const handleRefresh = () => {
         setRefreshing(true);
@@ -439,25 +517,50 @@ const TeacherListing: React.FC = () => {
 
     const handleEdit = (teacher: Teacher) => {
         setEditingTeacher(teacher);
+        if (teacher.classTeacherOf) {
+            const classSection = getClassSectionDetails(teacher.classTeacherOf, classes);
+            if (classSection) {
+                setSelectedClassSection(classSection);
+            }
+        } else {
+            setSelectedClassSection(null);
+        }
         setShowEditModal(true);
     };
 
     const handleDelete = async (teacher: Teacher): Promise<void> => {
-        try {
-            const response = await fetch(`https://testcode-2.onrender.com/school/updateTeacher/${teacher.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ isActive: false })
-            });
-            
-            const data = await response.json();
-            if (data.success) {
-                Alert.alert('Success', 'Teacher deleted successfully');
-                fetchTeachers();
-            }
-        } catch (error) {
-            Alert.alert('Error', 'Failed to delete teacher');
-        }
+        Alert.alert(
+            "Delete Teacher",
+            `Are you sure you want to delete ${teacher.name}?`,
+            [
+                {
+                    text: "Cancel",
+                    style: "cancel"
+                },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            const response = await fetch(`https://testcode-2.onrender.com/school/updateTeacher/${teacher.id}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ isActive: false })
+                            });
+                            
+                            const data = await response.json();
+                            if (data.success) {
+                                Alert.alert('Success', 'Teacher deleted successfully');
+                                fetchTeachers();
+                            }
+                        } catch (error) {
+                            Alert.alert('Error', 'Failed to delete teacher');
+                        }
+                    }
+                }
+            ],
+            { cancelable: true }
+        );
     };
 
     const handleUpdatemm = async (updateData: TeacherUpdateData): Promise<void> => {
@@ -465,12 +568,16 @@ const TeacherListing: React.FC = () => {
 
         try {
             setEditLoading(true);
+            if(updateData && updateData.classTeacherOf) updateData.classTeacherOf = +updateData.classTeacherOf
             const response = await fetch(`https://testcode-2.onrender.com/school/updateTeacher/${editingTeacher.id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(updateData)
+                body: JSON.stringify({
+                    ...updateData,
+                    classTeacherOf: updateData.classTeacherOf
+                })
             });
 
             const data = await response.json();
@@ -479,7 +586,9 @@ const TeacherListing: React.FC = () => {
                 Alert.alert('Success', 'Teacher updated successfully');
                 fetchTeachers();
                 setShowEditModal(false);
+                setSelectedClassSection(null);
             } else {
+                setEditLoading(false);
                 Alert.alert('Error', data.message || 'Failed to update teacher');
             }
         } catch (error) {
@@ -494,10 +603,6 @@ const TeacherListing: React.FC = () => {
         teacher.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         teacher.email.toLowerCase().includes(searchQuery.toLowerCase())
     );
-
-    const getSubjectName = (subjectId: number): string => {
-        return subjects.find(s => s.id === subjectId)?.name || 'Unknown Subject';
-    };
 
     if (loading) {
         return <LoadingState />;
@@ -522,7 +627,6 @@ const TeacherListing: React.FC = () => {
         <SafeAreaView style={styles.container}>
             <Surface style={styles.header}>
                 <View style={styles.headerContent}>
-                    <Text style={styles.title}>Teachers List</Text>
                     <TouchableOpacity 
                         style={styles.addButton}
                         onPress={() => router.push('/screens/addTeacher')}
@@ -551,7 +655,14 @@ const TeacherListing: React.FC = () => {
             >
                 {filteredTeachers.length > 0 ? (
                     filteredTeachers.map(teacher => (
-                        <TeacherCard key={teacher.id} teacher={teacher} onEdit={handleEdit} onDelete={handleDelete} />
+                        <TeacherCard 
+                            key={teacher.id} 
+                            teacher={teacher} 
+                            onEdit={handleEdit} 
+                            onDelete={handleDelete} 
+                            subjects={subjects}
+                            classes={classes}
+                        />
                     ))
                 ) : (
                     <Text style={styles.noTeachers}>
@@ -565,28 +676,37 @@ const TeacherListing: React.FC = () => {
                 onClose={() => {
                     setShowEditModal(false);
                     setEditingTeacher(null);
+                    setSelectedClassSection(null);
                 }}
                 onUpdate={handleUpdatemm}
                 teacher={editingTeacher}
                 selectedClassSection={selectedClassSection}
+                setSelectedClassSection={setSelectedClassSection}
                 setShowClassSelect={setShowClassSelect}
+                classes={classes}
             />
             <ClassSelectionModal
                 visible={showClassSelect}
                 onClose={() => setShowClassSelect(false)}
                 onSelect={(classId, sectionId) => {
-                    setEditingTeacher(prev =>
-                        prev ? {
-                            ...prev,
-                            classTeacherOf: classes.find(c => c.id === classId)?.name || '',
-                            sectionId: sectionId
-                        } : null
-                    );
-                    setSelectedClassSection({
-                        className: classes.find(c => c.id === classId)?.name || '',
-                        sectionId: sectionId,
-                        sectionName: classes.find(c => c.id === classId)?.sections.find(s => s.id === sectionId)?.name || ''
-                    });
+                    const selectedClass = classes.find(c => c.id === classId);
+                    const selectedSection = selectedClass?.sections.find(s => s.id === sectionId);
+                    
+                    if (selectedClass && selectedSection) {
+                        setEditingTeacher(prev =>
+                            prev ? {
+                                ...prev,
+                                classTeacherOf: sectionId.toString(),
+                                sectionId: sectionId
+                            } : null
+                        );
+                        
+                        setSelectedClassSection({
+                            className: selectedClass.name,
+                            sectionId: sectionId,
+                            sectionName: selectedSection.name
+                        });
+                    }
                     setShowClassSelect(false);
                 }}
                 editingTeacher={editingTeacher}
@@ -602,19 +722,19 @@ const styles = StyleSheet.create({
         backgroundColor: '#F8FAFF',
     },
     header: {
-        padding: 16,
+        padding: 10,
         backgroundColor: '#fff',
         elevation: 4,
         shadowColor: '#1A237E',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
         shadowRadius: 8,
         marginBottom: 8,
+        alignItems: 'center',
     },
     headerContent: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-end',
     },
     title: {
         fontSize: Math.min(24, width * 0.06),
@@ -625,13 +745,13 @@ const styles = StyleSheet.create({
     addButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#4CAF50',
+        backgroundColor: '#007AFF',
         paddingHorizontal: 16,
         paddingVertical: 10,
         borderRadius: 25,
         elevation: 3,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.2,
         shadowRadius: 4,
     },
@@ -692,13 +812,13 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         elevation: 2,
-        shadowColor: '#000',
+        shadowColor: '#007AFF',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
     },
     editButton: {
-        backgroundColor: '#4CAF50',
+        backgroundColor: '#007AFF',
     },
     deleteButton: {
         backgroundColor: '#FF5252',
@@ -966,6 +1086,7 @@ const styles = StyleSheet.create({
         borderColor: '#E0E0E0',
         borderRadius: 4,
         backgroundColor: '#fff',
+        marginBottom: 16,
     },
     selectIcon: {
         marginRight: 12,

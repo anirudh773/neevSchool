@@ -18,6 +18,9 @@ import {
   RefreshControl
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as SecureStore from 'expo-secure-store';
+import { Surface } from 'react-native-paper';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 
 // Types
 interface Holiday {
@@ -44,6 +47,7 @@ const HolidayList: React.FC = () => {
   const [isAddModalVisible, setAddModalVisible] = useState<boolean>(false);
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
+  const [actionLoading, setActionLoading] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [newHoliday, setNewHoliday] = useState<NewHolidayState>({
     title: '',
@@ -56,10 +60,6 @@ const HolidayList: React.FC = () => {
   const [fadeAnim] = useState(new Animated.Value(0));
   const [slideAnim] = useState(new Animated.Value(0));
 
-  // API Base URL
-  const BASE_URL = 'https://testcode-2.onrender.com/school';
-  const SCHOOL_ID = 1;
-
   const formatDate = (date: Date): string => {
     const day = date.getDate().toString().padStart(2, '0');
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
@@ -70,7 +70,11 @@ const HolidayList: React.FC = () => {
   const fetchHolidays = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${BASE_URL}/getHolidayBySchoolId?schoolId=${SCHOOL_ID}`);
+      const userDataStr = await SecureStore.getItemAsync('userData');
+      if (!userDataStr) throw new Error('User data not found');
+      
+      const userData = JSON.parse(userDataStr);
+      const response = await fetch(`https://testcode-2.onrender.com/school/getHolidayBySchoolId?schoolId=${userData.schoolId}`);
       const result = await response.json();
 
       if (result.success) {
@@ -92,7 +96,10 @@ const HolidayList: React.FC = () => {
 
   useEffect(() => {
     fetchHolidays();
-    
+    animateEntrance();
+  }, []);
+
+  const animateEntrance = () => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -106,7 +113,7 @@ const HolidayList: React.FC = () => {
         useNativeDriver: true
       })
     ]).start();
-  }, []);
+  };
 
   const handleEditHoliday = (holiday: Holiday) => {
     setIsEditMode(true);
@@ -121,7 +128,7 @@ const HolidayList: React.FC = () => {
   };
 
   const handleSaveHoliday = async () => {
-    if (!newHoliday.title || !newHoliday.description || !newHoliday.startDate || !newHoliday.endDate) {
+    if (!newHoliday.title || !newHoliday.description) {
       Alert.alert('Error', 'Please fill in all fields.');
       return;
     }
@@ -132,16 +139,27 @@ const HolidayList: React.FC = () => {
     }
 
     try {
+      setActionLoading(true);
+      const userDataStr = await SecureStore.getItemAsync('userData');
+      if (!userDataStr) throw new Error('User data not found');
+      
+      const userData = JSON.parse(userDataStr);
       const holidayData = {
-        schoolId: SCHOOL_ID,
+        schoolId: userData.schoolId,
         title: newHoliday.title,
         description: newHoliday.description,
         startDate: formatDate(newHoliday.startDate),
         endDate: formatDate(newHoliday.endDate)
       };
 
-      const response = await fetch(`${BASE_URL}/addHoliday`, {
-        method: 'POST',
+      console.log(holidayData)
+
+      const url = isEditMode 
+        ? `https://testcode-2.onrender.com/school/updateHoliday/${newHoliday.id}`
+        : 'https://testcode-2.onrender.com/school/addHoliday';
+
+      const response = await fetch(url, {
+        method: isEditMode ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(holidayData)
       });
@@ -149,22 +167,67 @@ const HolidayList: React.FC = () => {
       const result = await response.json();
 
       if (result.success) {
+        Alert.alert('Success', `Holiday ${isEditMode ? 'updated' : 'added'} successfully`);
         await fetchHolidays();
         setAddModalVisible(false);
         setIsEditMode(false);
-        setNewHoliday({ 
-          title: '', 
-          description: '', 
-          startDate: new Date(), 
-          endDate: new Date() 
-        });
+        resetForm();
       } else {
-        Alert.alert('Error', result.message || 'Could not add holiday');
+        throw new Error(result.message);
       }
     } catch (error) {
       console.error('Error saving holiday', error);
-      Alert.alert('Error', 'Could not save holiday');
+      Alert.alert('Error', `Could not ${isEditMode ? 'update' : 'add'} holiday`);
+    } finally {
+      setActionLoading(false);
     }
+  };
+
+  const handleDeleteHoliday = (holidayId: string) => {
+    Alert.alert(
+      'Confirm Deletion',
+      'Are you sure you want to delete this holiday?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setActionLoading(true);
+              const response = await fetch(`https://testcode-2.onrender.com/school/updateHoliday/${holidayId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ isActive: false })
+              });
+
+              const result = await response.json();
+              if (result.success) {
+                Alert.alert('Success', 'Holiday deleted successfully');
+                await fetchHolidays();
+              } else {
+                throw new Error(result.message);
+              }
+            } catch (error) {
+              console.error('Error deleting holiday:', error);
+              Alert.alert('Error', 'Failed to delete holiday');
+            } finally {
+              setActionLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const resetForm = () => {
+    setNewHoliday({
+      id: '',
+      title: '',
+      description: '',
+      startDate: new Date(),
+      endDate: new Date()
+    });
   };
 
   const renderHolidayItem = ({ item, index }: { item: Holiday; index: number }) => (
@@ -214,28 +277,6 @@ const HolidayList: React.FC = () => {
       </View>
     </Animated.View>
   );
-
-  const handleDeleteHoliday = (holidayId: string) => {
-    Alert.alert(
-      'Confirm Deletion',
-      'Are you sure you want to delete this holiday?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await fetchHolidays();
-            } catch (error) {
-              console.error('Error deleting holiday', error);
-              Alert.alert('Error', 'Could not delete holiday');
-            }
-          }
-        }
-      ]
-    );
-  };
 
   const renderModal = () => (
     <Modal
@@ -358,6 +399,12 @@ const HolidayList: React.FC = () => {
 
   return (
     <View style={styles.container}>
+      {actionLoading && (
+        <View style={styles.actionLoadingOverlay}>
+          <ActivityIndicator size="large" color="#fff" />
+        </View>
+      )}
+      
       <Text style={styles.header}>School Holidays</Text>
       <FlatList
         data={holidays}
@@ -614,6 +661,17 @@ const styles = StyleSheet.create({
     marginTop: 50,
     fontSize: 16,
     fontWeight: '500',
+  },
+  actionLoadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
   },
 });
 

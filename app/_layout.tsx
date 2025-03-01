@@ -15,8 +15,8 @@ export default function RootLayout() {
           headerShown: false, // Hide header for the tabs screen
         }} 
       />
-      <Stack.Screen name="screens/addTeacher" options={{ title: 'Add Teacher', headerShown: false }} />
-      <Stack.Screen name="screens/listTeacherss" options={{ title: 'List Teacher', headerShown: false }} />
+      <Stack.Screen name="screens/addTeacher" options={{ title: 'Add Teacher', headerShown: true }} />
+      <Stack.Screen name="screens/listTeacherss" options={{ title: 'List Teacher', headerShown: true }} />
       <Stack.Screen name="screens/ClassAndSectionPage" options={{ title: 'Your Classes', headerShown: true }} />
       <Stack.Screen name="screens/StudentListScreen" options={{ title: 'Students', headerShown: true }} />
       <Stack.Screen name="screens/AddStudentScreen" options={{ title: 'Add Student', headerShown: false }} />
@@ -29,9 +29,18 @@ export default function RootLayout() {
       <Stack.Screen name="screens/Admin/ExamDashboard" options={{title: 'Exam Dashboard', headerShown: true}} />
       {/* <Stack.Screen name="screens/Admin/HomeworkManagementSystem" options={{title: 'Homework Management', headerShown: true}} /> */}
       <Stack.Screen name="screens/Student/AttendenceScreen" options={{ title: 'Your attendence', headerShown: true }} />
-      <Stack.Screen name="screens/Student/YourExamsAndMarksScreen" options={{ title: 'Your  Exam', headerShown: true }} />
+      <Stack.Screen name="screens/Student/YourExamsAndMarksScreen" options={{ title: 'Your Exam', headerShown: true }} />
+      <Stack.Screen name="screens/Student/YourTimetable" options={{ title: 'Your timetable', headerShown: true }} />
       <Stack.Screen name="screens/Teacher/FeedAttendence" options={{ title: 'Feed attendence', headerShown: true }} />
       <Stack.Screen name="screens/Teacher/HomeworkManagementSystem" options={{title: 'Homework Management', headerShown: true}} />
+      <Stack.Screen name="screens/Teacher/TeacherTimeTable" options={{title: 'Your schedule', headerShown: true}} />
+      <Stack.Screen 
+        name="screens/HolidayListView" 
+        options={{ 
+          title: 'School Holidays',
+          headerShown: true 
+        }} 
+      />
     </Stack>
     
   );
