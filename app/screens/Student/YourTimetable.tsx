@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Activ
 import { SafeAreaView } from "react-native-safe-area-context"
 import { StatusBar } from "expo-status-bar"
 import { Ionicons, FontAwesome } from "@expo/vector-icons"
+import * as SecureStore from 'expo-secure-store'
 
 const { width } = Dimensions.get('window')
 
@@ -26,16 +27,61 @@ interface SchoolPeriod {
   periodName: string;
 }
 
+interface UserInfo {
+  id: number;
+  userId: string;
+  schoolId: number;
+  name: string;
+  role: number;
+  teacherId: number | null;
+  studentClass: {
+    classId: number;
+    className: string;
+    sectionId: number;
+    sectionName: string;
+  };
+}
+
 const YourTimetable = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [timetableData, setTimetableData] = useState<TimetableEntry[]>([])
   const [days, setDays] = useState<SchoolDay[]>([])
   const [periods, setPeriods] = useState<SchoolPeriod[]>([])
   const [selectedDay, setSelectedDay] = useState('')
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
 
-  const fetchMasterData = async () => {
+  // Get user data once at component mount
+  useEffect(() => {
+    const initializeData = async () => {
+      try {
+        const userData = await SecureStore.getItemAsync('userData')
+        if (!userData) {
+          throw new Error('User data not found')
+        }
+
+        const parsedUserInfo: UserInfo = JSON.parse(userData)
+        setUserInfo(parsedUserInfo)
+
+        // Call other fetch functions with the user info
+        await Promise.all([
+          fetchMasterData(parsedUserInfo),
+          fetchTimetable(parsedUserInfo)
+        ])
+      } catch (error) {
+        console.error('Error initializing data:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    initializeData()
+  }, [])
+
+  const fetchMasterData = async (userInfo: UserInfo) => {
     try {
-      const response = await fetch('https://testcode-2.onrender.com/school/getSchudeleMasterData?schoolId=1')
+      const response = await fetch(
+        `http://13.202.16.149:8080/school/getSchudeleMasterData?schoolId=${userInfo.schoolId}`
+      )
       const result = await response.json()
       
       if (result.success) {
@@ -48,17 +94,14 @@ const YourTimetable = () => {
     }
   }
 
-  useEffect(() => {
-    Promise.all([fetchMasterData(), fetchTimetable()]).finally(() => {
-      setIsLoading(false)
-    })
-  }, [])
-
-  const fetchTimetable = async () => {
+  const fetchTimetable = async (userInfo: UserInfo) => {
     try {
       setIsLoading(true)
+      const { studentClass, schoolId } = userInfo
+      const { classId, sectionId } = studentClass
+
       const response = await fetch(
-        'https://testcode-2.onrender.com/school/getSchoolTimetable?schoolId=1&classId=25&sectionId=1'
+        `http://13.202.16.149:8080/school/getSchoolTimetable?schoolId=${schoolId}&classId=${classId}&sectionId=${sectionId}`
       )
       const result = await response.json()
       if (result.success) {
@@ -91,7 +134,11 @@ const YourTimetable = () => {
       <StatusBar style="auto" />
       <View style={styles.header}>
         <Text style={styles.title}>Your Weekly Timetable</Text>
-        <Text style={styles.subtitle}>Class 10th - Section A</Text>
+        {userInfo && (
+          <Text style={styles.subtitle}>
+            Class {userInfo.studentClass.className} - Section {userInfo.studentClass.sectionName}
+          </Text>
+        )}
       </View>
 
       <View style={styles.dayPickerContainer}>

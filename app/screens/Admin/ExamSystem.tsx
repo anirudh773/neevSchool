@@ -127,7 +127,7 @@ const ExamDashboardScreen: React.FC = () => {
       }
 
       const response = await fetch(
-        `https://testcode-2.onrender.com/school/getExamMasterData?schoolId=${userData.schoolId}`,
+        `http://13.202.16.149:8080/school/getExamMasterData?schoolId=${userData.schoolId}`,
         {
           headers: {
             'Content-Type': 'application/json'
@@ -169,7 +169,7 @@ const ExamDashboardScreen: React.FC = () => {
       const userData = JSON.parse(userDataStr);
 
       const response = await fetch(
-        `https://testcode-2.onrender.com/school/getRecentExam?schoolId=${userData.schoolId}&classId=${selectedClass.id}&sectionId=${selectedSection.id}`,
+        `http://13.202.16.149:8080/school/getRecentExam?schoolId=${userData.schoolId}&classId=${selectedClass.id}&sectionId=${selectedSection.id}`,
         {
           headers: {
             'Content-Type': 'application/json'

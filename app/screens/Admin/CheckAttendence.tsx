@@ -139,7 +139,7 @@ const CheckAttendence: React.FC = () => {
             
 			setLoading(true);
 			const response = await fetch(
-				`https://testcode-2.onrender.com/school/getAttendaceBySectionId?sectionId=${sectionId}&startDate=${startDateStr}&endDate=${endDateStr}`
+				`http://13.202.16.149:8080/school/getAttendaceBySectionId?sectionId=${sectionId}&startDate=${startDateStr}&endDate=${endDateStr}`
 			);
 
 			if (!response.ok) {

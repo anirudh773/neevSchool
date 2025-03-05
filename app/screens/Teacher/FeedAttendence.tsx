@@ -39,7 +39,7 @@ const TeacherAttendanceManagement: React.FC = () => {
   const fetchStudentsBySection = async (sectionId: string) => {
     try {
       setLoading(true);
-      const response = await fetch(`https://testcode-2.onrender.com/school/getStudentBySection?sectionId=${sectionId}`);
+      const response = await fetch(`http://13.202.16.149:8080/school/getStudentBySection?sectionId=${sectionId}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -116,7 +116,7 @@ const TeacherAttendanceManagement: React.FC = () => {
         records: records
       };
 
-      const response = await fetch('https://testcode-2.onrender.com/school/submitAttendance', {
+      const response = await fetch('http://13.202.16.149:8080/school/submitAttendance', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -74,7 +74,7 @@ const HolidayList: React.FC = () => {
       if (!userDataStr) throw new Error('User data not found');
       
       const userData = JSON.parse(userDataStr);
-      const response = await fetch(`https://testcode-2.onrender.com/school/getHolidayBySchoolId?schoolId=${userData.schoolId}`);
+      const response = await fetch(`http://13.202.16.149:8080/school/getHolidayBySchoolId?schoolId=${userData.schoolId}`);
       const result = await response.json();
 
       if (result.success) {
@@ -155,8 +155,8 @@ const HolidayList: React.FC = () => {
       console.log(holidayData)
 
       const url = isEditMode 
-        ? `https://testcode-2.onrender.com/school/updateHoliday/${newHoliday.id}`
-        : 'https://testcode-2.onrender.com/school/addHoliday';
+        ? `http://13.202.16.149:8080/school/updateHoliday/${newHoliday.id}`
+        : 'http://13.202.16.149:8080/school/addHoliday';
 
       const response = await fetch(url, {
         method: isEditMode ? 'PUT' : 'POST',
@@ -195,7 +195,7 @@ const HolidayList: React.FC = () => {
           onPress: async () => {
             try {
               setActionLoading(true);
-              const response = await fetch(`https://testcode-2.onrender.com/school/updateHoliday/${holidayId}`, {
+              const response = await fetch(`http://13.202.16.149:8080/school/updateHoliday/${holidayId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ isActive: false })

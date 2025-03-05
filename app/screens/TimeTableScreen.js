@@ -64,15 +64,21 @@ const TimeTableManager = () => {
   const loadClassesData = async () => {
     try {
       setIsLoading(prev => ({ ...prev, classes: true }));
-      setError(null);
-      const classesData = await SecureStore.getItemAsync('schoolClasses');
+      const userData = await SecureStore.getItemAsync('userData');
+      if (!userData) return;
+
+      const { role } = JSON.parse(userData);
+      // Get classes based on role
+      const classesKey = role === 2 ? 'teacherClasses' : 'schoolClasses';
+      const classesData = await SecureStore.getItemAsync(classesKey);
+
       if (classesData) {
         const parsedData = JSON.parse(classesData);
         setClasses(parsedData || []);
       }
     } catch (error) {
       console.error('Error loading classes:', error);
-      setError('Failed to load class data. Please try again.');
+      setError('Failed to load class data');
     } finally {
       setIsLoading(prev => ({ ...prev, classes: false }));
     }
@@ -93,7 +99,7 @@ const TimeTableManager = () => {
     try {
       setIsLoading(prev => ({ ...prev, timetable: true }));
       const response = await fetch(
-        `https://testcode-2.onrender.com/school/getSchoolTimetable?schoolId=1&classId=${classId}&sectionId=${sectionId}`
+        `http://13.202.16.149:8080/school/getSchoolTimetable?schoolId=1&classId=${classId}&sectionId=${sectionId}`
       );
       const result = await response.json();
       
@@ -143,7 +149,7 @@ const TimeTableManager = () => {
     try {
       setIsLoading(prev => ({ ...prev, update: true }));
       const response = await fetch(
-        `https://testcode-2.onrender.com/school/updateSchoolTimetable/${entryId}`,
+        `http://13.202.16.149:8080/school/updateSchoolTimetable/${entryId}`,
         {
           method: 'PUT',
           headers: {
@@ -244,21 +250,37 @@ const TimeTableManager = () => {
   const fetchMasterData = async () => {
     try {
       setIsLoading(prev => ({ ...prev, masterData: true }));
-      const response = await fetch('https://testcode-2.onrender.com/school/getSchudeleMasterData?schoolId=1');
-      const result = await response.json();
-      
-      if (result.success) {
-        setMasterData(result.data);
-        setTeachers(result.data.teachers);
-        setSubjects(result.data.subjects);
-        setPeriods(result.data.schoolPeriod);
-        setDays(result.data.schoolDays);
-      } else {
-        setError('Failed to load schedule data');
+      setError(null);
+
+      const userData = await SecureStore.getItemAsync('userData');
+      if (!userData) {
+        throw new Error('User data not found');
       }
-    } catch (err) {
-      setError('Error connecting to server');
-      console.error('Error fetching schedule data:', err);
+
+      const { schoolId } = JSON.parse(userData);
+
+      const response = await fetch(
+        `http://13.202.16.149:8080/school/getSchudeleMasterData?schoolId=${schoolId}`,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const result = await response.json();
+      if (result.success) {
+        setPeriods(result.data.schoolPeriod || []);
+        setDays(result.data.schoolDays || []);
+        setTeachers(result.data.teachers || []);
+        setSubjects(result.data.subjects || []);
+        setMasterData(result.data);
+      } else {
+        throw new Error(result.message || 'Failed to fetch schedule data');
+      }
+    } catch (error) {
+      console.error('Error fetching master data:', error);
+      setError('Failed to load schedule data. Please try again.');
     } finally {
       setIsLoading(prev => ({ ...prev, masterData: false }));
     }
@@ -300,11 +322,17 @@ const TimeTableManager = () => {
       return;
     }
 
+    setIsLoading(prev => ({ ...prev, update: true }));
+
     try {
-      setLoading(true);
+      const userData = await SecureStore.getItemAsync('userData');
+      if (!userData) {
+        throw new Error('User data not found');
+      }
+
+      const { schoolId } = JSON.parse(userData);
       const scheduleData = [];
 
-      // Convert timetable data to API format
       Object.entries(timetable).forEach(([key, teacher]) => {
         const [day, period, classId, sectionId] = key.split('-');
         const cellSubject = cellSubjects[key];
@@ -329,15 +357,13 @@ const TimeTableManager = () => {
         sectionId: selectedSection.id,
         schedule: scheduleData
       };
-      console.log(payload, 'dsdsdsdsd')
 
       const response = await fetch(
-        'https://testcode-2.onrender.com/school/submitSchoolSchudele?examScId=2',
+        `http://13.202.16.149:8080/school/submitSchoolSchudele?schoolId=${schoolId}`,
         {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'examScId': '2'
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify(payload)
         }
@@ -347,7 +373,6 @@ const TimeTableManager = () => {
 
       if (result.success) {
         Alert.alert('Success', 'Schedule saved successfully');
-        // Optionally clear the form or refresh data
         setTimetable({});
         setCellSubjects({});
       } else {
@@ -357,7 +382,7 @@ const TimeTableManager = () => {
       console.error('Error saving schedule:', error);
       Alert.alert('Error', error.message || 'Failed to save schedule. Please try again.');
     } finally {
-      setLoading(false);
+      setIsLoading(prev => ({ ...prev, update: false }));
     }
   };
 
@@ -431,11 +456,18 @@ const TimeTableManager = () => {
 
           {selectedClass && selectedSection && (
             <TouchableOpacity
-              style={styles.saveButton}
+              style={[styles.saveButton, isLoading.update && styles.disabledButton]}
               onPress={handleSubmitSchedule}
+              disabled={isLoading.update}
             >
-              <FontAwesome name="save" size={18} color="#fff" />
-              <Text style={styles.saveButtonText}>Save</Text>
+              {isLoading.update ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <FontAwesome name="save" size={16} color="#fff" />
+                  <Text style={styles.saveButtonText}>Save Schedule</Text>
+                </>
+              )}
             </TouchableOpacity>
           )}
         </View>
@@ -1136,6 +1168,9 @@ const styles = StyleSheet.create({
     color: '#1A237E',
     fontSize: 14,
     fontWeight: '500',
+  },
+  disabledButton: {
+    opacity: 0.7,
   },
 });
 

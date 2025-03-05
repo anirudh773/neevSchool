@@ -246,9 +246,11 @@ const LoginPage = () => {
       console.log('Push Token:', pushToken);
 
       // Store push token
-      await SecureStore.setItemAsync('pushToken', pushToken);
+      if (pushToken) {
+        await SecureStore.setItemAsync('pushToken', pushToken);
+      }
 
-      const response = await fetch('https://testcode-2.onrender.com/school/login', {
+      const response = await fetch('http://13.202.16.149:8080/school/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -262,18 +264,27 @@ const LoginPage = () => {
 
       const data = await response.json();
 
+      console.log(data, "ddsdsds")
+
       if (response.ok) {
         // Store all tokens and data
-        await Promise.all([
+        const storagePromises = [
           SecureStore.setItemAsync('userToken', data.token),
           SecureStore.setItemAsync('userData', JSON.stringify(data.userInfo)),
-          SecureStore.setItemAsync('userPermission', JSON.stringify(data.permission)),
-          SecureStore.setItemAsync('schoolClasses', JSON.stringify(data.classes)),
-          SecureStore.setItemAsync('pushToken', pushToken),
-        ]);
+          SecureStore.setItemAsync('userPermission', JSON.stringify(data.permission))
+        ];
+
+        if (pushToken) {
+          storagePromises.push(SecureStore.setItemAsync('pushToken', pushToken));
+        }
+
+        await Promise.all(storagePromises);
 
         if(data.userInfo && data.userInfo.role == 2){
           await SecureStore.setItemAsync('teacherClasses', JSON.stringify(data.teacherClasses));
+        }
+        else if(data.userInfo && [1,2].includes(data.userInfo.role)){
+          await SecureStore.setItemAsync('schoolClasses',JSON.stringify(data.classes));
         }
         
         // Send test notification

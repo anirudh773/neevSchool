@@ -18,7 +18,7 @@ import { ActivityIndicator, TextInput, Surface, IconButton } from 'react-native-
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
-import { Class } from '@/constants/types';
+import { Class } from '../../constants/types';
 
 const { width } = Dimensions.get('window');
 
@@ -60,7 +60,7 @@ const getClassSectionName = (sectionId: number | undefined, classes: Class[]): s
     if (!sectionId || !classes?.length) return 'Not Assigned';
     
     for (const classItem of classes) {
-        const section = classItem.sections.find(s => s.id === sectionId);
+        const section = classItem.sections.find((s: Section) => s.id === sectionId);
         if (section) {
             return `Class ${classItem.name} - Section ${section.name}`;
         }
@@ -155,7 +155,7 @@ const ClassSelectionModal: React.FC<ClassSelectionModalProps> = ({
                     {classes.map((classItem) => (
                         <View key={classItem.id}>
                             {classItem.sections.length > 0 ? (
-                                classItem.sections.map((section) => (
+                                classItem.sections.map((section: Section) => (
                                     <TouchableOpacity
                                         key={`${classItem.id}-${section.id}`}
                                         style={[
@@ -234,7 +234,7 @@ const getClassSectionDetails = (sectionId: string | number | undefined, classes:
     if (!sectionId) return null;
     
     for (const classItem of classes) {
-        const section = classItem.sections.find(s => s.id === Number(sectionId));
+        const section = classItem.sections.find((s: Section) => s.id === Number(sectionId));
         if (section) {
             return {
                 className: classItem.name,
@@ -267,7 +267,7 @@ const EditModal: React.FC<EditModalProps> = ({
             setFormData({
                 name: teacher.name,
                 email: teacher.email,
-                classTeacherOf: teacher.classTeacherOf
+                classTeacherOf: teacher.classTeacherOf ? Number(teacher.classTeacherOf) : undefined
             });
             
             if (teacher.classTeacherOf) {
@@ -282,14 +282,17 @@ const EditModal: React.FC<EditModalProps> = ({
     }, [teacher]);
 
     const handleUpdate = () => {
-        if (!formData.name || !formData.email) {
+        if (!formData.name || !formData.email || !teacher) {
             Alert.alert('Error', 'Please fill in all required fields');
             return;
         }
         
         const updateData = {
-            ...formData,
-            classTeacherOf: selectedClassSection?.sectionId.toString()
+            name: teacher?.name || '',
+            email: teacher?.email || '',
+            classTeacherOf: teacher?.classTeacherOf ? Number(teacher.classTeacherOf) : undefined,
+            primarySubjectId: teacher?.primarySubjectId,
+            substituteSubjectId: teacher?.substituteSubjectId
         };
         
         onUpdate(updateData);
@@ -411,6 +414,11 @@ interface Subject {
     icon: string;
 }
 
+interface Section {
+    id: number;
+    name: string;
+}
+
 const TeacherListing: React.FC = () => {
     const router = useRouter();
     const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -449,7 +457,7 @@ const TeacherListing: React.FC = () => {
     const fetchTeachers = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`https://testcode-2.onrender.com/school/getTeachersBySchoolId?schoolId=${schoolId}`);
+            const response = await fetch(`http://13.202.16.149:8080/school/getTeachersBySchoolId?schoolId=${schoolId}`);
             const data = await response.json();
             if (data.success) {
                 setTeachers(data.data);
@@ -471,7 +479,7 @@ const TeacherListing: React.FC = () => {
                 return parsedSubjects;
             }
 
-            const response = await fetch(`https://testcode-2.onrender.com/school/getExamMasterData?schoolId=${schoolId}`);
+            const response = await fetch(`http://13.202.16.149:8080/school/getExamMasterData?schoolId=${schoolId}`);
             const data = await response.json();
             if (data.success) {
                 const newSubjects = data.data.subjectBySchool;
@@ -493,7 +501,7 @@ const TeacherListing: React.FC = () => {
                     setClasses(JSON.parse(classesData));
                 }
 
-                const response = await fetch(`https://testcode-2.onrender.com/school/getSchudeleMasterData?schoolId=${schoolId}`);
+                const response = await fetch(`http://13.202.16.149:8080/school/getSchudeleMasterData?schoolId=${schoolId}`);
                 const result = await response.json();
                 
                 if (result.success) {
@@ -542,7 +550,7 @@ const TeacherListing: React.FC = () => {
                     style: "destructive",
                     onPress: async () => {
                         try {
-                            const response = await fetch(`https://testcode-2.onrender.com/school/updateTeacher/${teacher.id}`, {
+                            const response = await fetch(`http://13.202.16.149:8080/school/updateTeacher/${teacher.id}`, {
                                 method: 'PUT',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ isActive: false })
@@ -569,7 +577,7 @@ const TeacherListing: React.FC = () => {
         try {
             setEditLoading(true);
             if(updateData && updateData.classTeacherOf) updateData.classTeacherOf = +updateData.classTeacherOf
-            const response = await fetch(`https://testcode-2.onrender.com/school/updateTeacher/${editingTeacher.id}`, {
+            const response = await fetch(`http://13.202.16.149:8080/school/updateTeacher/${editingTeacher.id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
@@ -690,7 +698,7 @@ const TeacherListing: React.FC = () => {
                 onClose={() => setShowClassSelect(false)}
                 onSelect={(classId, sectionId) => {
                     const selectedClass = classes.find(c => c.id === classId);
-                    const selectedSection = selectedClass?.sections.find(s => s.id === sectionId);
+                    const selectedSection = selectedClass?.sections.find((s: Section) => s.id === sectionId);
                     
                     if (selectedClass && selectedSection) {
                         setEditingTeacher(prev =>

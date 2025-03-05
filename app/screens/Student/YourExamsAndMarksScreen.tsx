@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -9,18 +9,22 @@ import {
   Modal, 
   FlatList,
   Platform,
-  useWindowDimensions 
+  useWindowDimensions,
+  ActivityIndicator
 } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { LinearGradient } from 'expo-linear-gradient';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import * as SecureStore from 'expo-secure-store';
 
-interface Schedule {
+interface ExamSchedule {
   subject_name: string;
   exam_datetime: string;
   duration_minutes: number;
   max_marks: number;
   passing_marks: number;
+  marks_obtained?: string;
+  remarks?: string;
 }
 
 interface Exam {
@@ -28,7 +32,7 @@ interface Exam {
   name: string;
   date: string;
   status: 'Upcoming' | 'Ongoing';
-  schedules: Schedule[];
+  schedules: ExamSchedule[];
 }
 
 interface ChartData {
@@ -41,6 +45,26 @@ interface ChartData {
 interface Marks {
   subject: string;
   marks: number;
+}
+
+interface ApiResponse {
+  success: boolean;
+  data: Exam[];
+}
+
+interface UserInfo {
+  id: number;
+  userId: string;
+  schoolId: number;
+  name: string;
+  role: number;
+  teacherId: number | null;
+  studentClass: {
+    classId: number;
+    className: string;
+    sectionId: number;
+    sectionName: string;
+  };
 }
 
 type GradientColors = [string, string];
@@ -108,73 +132,59 @@ const THEME = {
 const ExamScheduleApp: React.FC = () => {
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [modalVisible, setModalVisible] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [examData, setExamData] = useState<Exam[]>([]);
   const { width } = useWindowDimensions();
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
 
-  const examData: Exam[] = [
-    {
-      id: 25,
-      name: "test",
-      date: "Feb 19, 2025",
-      status: "Upcoming",
-      schedules: [
-        {
-          subject_name: "English",
-          exam_datetime: "2025-02-20T06:37:00.000Z",
-          duration_minutes: 78,
-          max_marks: 100,
-          passing_marks: 76,
+  useEffect(() => {
+    const initializeData = async () => {
+      try {
+        const userData = await SecureStore.getItemAsync('userData');
+        if (!userData) {
+          throw new Error('User data not found');
         }
-      ]
-    },
-    {
-      id: 16,
-      name: "Midterm Exam 2024",
-      date: "Feb 10, 2025",
-      status: "Ongoing",
-      schedules: [
-        {
-          subject_name: "Mathematics",
-          exam_datetime: "2024-02-12T00:00:00.000Z",
-          duration_minutes: 120,
-          max_marks: 100,
-          passing_marks: 35,
-        },
-        {
-          subject_name: "Science",
-          exam_datetime: "2024-02-14T00:00:00.000Z",
-          duration_minutes: 90,
-          max_marks: 100,
-          passing_marks: 35,
-        }
-      ]
-    }
-  ];
 
-  const marksData: ChartData = {
-    labels: ["English", "Mathematics", "Science"],
-    datasets: [
-      {
-        data: [85, 78, 92],
+        const parsedUserInfo: UserInfo = JSON.parse(userData);
+        setUserInfo(parsedUserInfo);
+        await fetchExamData(parsedUserInfo);
+      } catch (error) {
+        console.error('Error initializing data:', error);
       }
-    ]
-  };
+    };
 
-  const studentMarks: Marks[] = [
-    { subject: "English", marks: 85 },
-    { subject: "Mathematics", marks: 78 },
-    { subject: "Science", marks: 92 },
-  ];
+    initializeData();
+  }, []);
 
-  const formatDateTime = (datetime: string): string => {
-    return new Date(datetime).toLocaleString();
+  const fetchExamData = async (user: UserInfo) => {
+    try {
+      setLoading(true);
+      const { schoolId, id: studentId, studentClass } = user;
+      const { classId, sectionId } = studentClass;
+
+      const response = await fetch(
+        `http://13.202.16.149:8080/school/getStudentExams?schoolId=${schoolId}&classId=${classId}&sectionId=${sectionId}&studentId=${studentId}`
+      );
+      const result: ApiResponse = await response.json();
+
+      if (result.success) {
+        setExamData(result.data);
+      }
+    } catch (error) {
+      console.error('Error fetching exam data:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const renderExamCard = (exam: Exam) => {
-    const gradientColors = THEME.colors.status[exam.status.toLowerCase() as Lowercase<Exam['status']>];
+    const status = exam?.status?.toLowerCase() as Lowercase<Exam['status']>;
+    const gradientColors = status ? 
+      THEME.colors.status[status] || THEME.colors.gradient.primary : 
+      THEME.colors.gradient.primary;
     
     return (
       <TouchableOpacity
-        key={exam.id}
         style={styles.card}
         onPress={() => {
           setSelectedExam(exam);
@@ -188,45 +198,111 @@ const ExamScheduleApp: React.FC = () => {
           style={styles.cardGradient}
         >
           <View style={styles.cardHeader}>
-            <Text style={styles.examName}>{exam.name}</Text>
+            <Text style={styles.examName}>{exam?.name || 'Untitled Exam'}</Text>
             <View style={styles.statusContainer}>
               <FontAwesome 
-                name={exam.status === 'Upcoming' ? 'calendar' : 'calendar-check-o'} 
+                name={exam?.status === 'Upcoming' ? 'calendar' : 'calendar-check-o'} 
                 size={16} 
                 color="#fff" 
               />
-              <Text style={styles.statusText}>{exam.status}</Text>
+              <Text style={styles.statusText}>{exam?.status || 'Unknown'}</Text>
             </View>
           </View>
           <Text style={styles.examDate}>
-            <FontAwesome name="clock-o" size={14} color="#fff" /> {exam.date}
+            <FontAwesome name="clock-o" size={14} color="#fff" /> {exam?.date || 'Date not set'}
           </Text>
           <View style={styles.subjectsPreview}>
-            {exam.schedules.map((schedule, index) => (
-              <View key={index} style={styles.subjectChip}>
-                <Text style={styles.subjectChipText}>{schedule.subject_name}</Text>
-              </View>
-            ))}
+            {exam?.schedules?.length ? (
+              exam.schedules.map((schedule, index) => (
+                <View key={index} style={styles.subjectChip}>
+                  <Text style={styles.subjectChipText}>{schedule.subject_name}</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={[styles.subjectChipText, { color: THEME.colors.text.muted }]}>
+                No subjects scheduled
+              </Text>
+            )}
           </View>
         </LinearGradient>
       </TouchableOpacity>
     );
   };
 
-  const renderMarksTable = () => (
-    <View style={styles.tableContainer}>
-      <View style={styles.tableHeader}>
-        <Text style={styles.headerText}>Subject</Text>
-        <Text style={styles.headerText}>Marks</Text>
-      </View>
-      {studentMarks.map((item) => (
-        <View key={item.subject} style={styles.tableRow}>
-          <Text style={styles.rowText}>{item.subject}</Text>
-          <Text style={styles.rowText}>{item.marks}</Text>
+  const renderMarksTable = () => {
+    if (!selectedExam?.schedules?.length) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No schedule data available</Text>
         </View>
-      ))}
-    </View>
-  );
+      );
+    }
+
+    return (
+      <View style={styles.tableContainer}>
+        <View style={styles.tableHeader}>
+          <Text style={styles.headerText}>Subject</Text>
+          <Text style={styles.headerText}>Marks</Text>
+          <Text style={styles.headerText}>Status</Text>
+        </View>
+        {selectedExam.schedules.map((schedule, index) => (
+          <View key={`marks-${index}`} style={styles.tableRow}>
+            <Text style={styles.rowText}>{schedule.subject_name}</Text>
+            <Text style={styles.rowText}>
+              {schedule.marks_obtained 
+                ? `${schedule.marks_obtained}/${schedule.max_marks}`
+                : 'Pending'
+              }
+            </Text>
+            <Text style={[
+              styles.rowText,
+              {
+                color: schedule.marks_obtained 
+                  ? Number(schedule.marks_obtained) >= schedule.passing_marks 
+                    ? '#10B981' 
+                    : '#EF4444'
+                  : '#64748B'
+              }
+            ]}>
+              {schedule.marks_obtained 
+                ? Number(schedule.marks_obtained) >= schedule.passing_marks 
+                  ? 'Pass' 
+                  : 'Fail'
+                : 'N/A'
+              }
+            </Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  const getChartData = () => {
+    if (!selectedExam?.schedules?.length) return {
+      labels: [],
+      datasets: [{ data: [0] }]
+    };
+
+    const validSchedules = selectedExam.schedules.filter(s => 
+      s.marks_obtained && !isNaN(Number(s.marks_obtained))
+    );
+
+    if (!validSchedules.length) return {
+      labels: ['No Data'],
+      datasets: [{ data: [0] }]
+    };
+
+    return {
+      labels: validSchedules.map(s => s.subject_name.substring(0, 3)),
+      datasets: [{
+        data: validSchedules.map(s => Number(s.marks_obtained) || 0)
+      }]
+    };
+  };
+
+  const formatDateTime = (datetime: string): string => {
+    return new Date(datetime).toLocaleString();
+  };
 
   const ExamDetailsModal: React.FC = () => (
     <Modal
@@ -242,61 +318,69 @@ const ExamScheduleApp: React.FC = () => {
           end={{ x: 1, y: 1 }}
           style={styles.modalHeader}
         >
-          <Text style={styles.modalTitle}>{selectedExam?.name}</Text>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={() => setModalVisible(false)}
-          >
-            <FontAwesome name="times" size={24} color="#fff" />
-          </TouchableOpacity>
+          <View style={styles.modalHeaderContent}>
+            <Text style={styles.modalTitle}>{selectedExam?.name}</Text>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setModalVisible(false)}
+            >
+              <FontAwesome name="times" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.modalSubtitle}>
+            <FontAwesome name="calendar" size={14} color="#fff" /> {selectedExam?.date}
+          </Text>
         </LinearGradient>
 
         <ScrollView 
           style={styles.modalContent}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ 
-            paddingBottom: 40,
-            gap: 24
-          }}
+          contentContainerStyle={styles.modalScrollContent}
         >
           <View style={styles.scheduleContainer}>
             <Text style={styles.sectionTitle}>Exam Schedule</Text>
-            {selectedExam?.schedules.map((schedule, index) => (
-              <LinearGradient
-                key={index}
-                colors={THEME.colors.gradient.card.success}
-                style={styles.scheduleCard}
-              >
-                <Text style={styles.subjectName}>{schedule.subject_name}</Text>
-                <View style={styles.scheduleDetails}>
-                  <View style={styles.scheduleItem}>
-                    <FontAwesome name="calendar" size={16} color="#fff" />
-                    <Text style={styles.scheduleText}>
-                      {formatDateTime(schedule.exam_datetime)}
-                    </Text>
+            {selectedExam?.schedules?.length ? (
+              selectedExam.schedules.map((schedule, index) => (
+                <LinearGradient
+                  key={`schedule-${index}`}
+                  colors={THEME.colors.gradient.card.success}
+                  style={styles.scheduleCard}
+                >
+                  <Text style={styles.subjectName}>{schedule.subject_name}</Text>
+                  <View style={styles.scheduleDetails}>
+                    <View style={styles.scheduleItem}>
+                      <FontAwesome name="calendar" size={16} color="#fff" />
+                      <Text style={styles.scheduleText}>
+                        {formatDateTime(schedule.exam_datetime)}
+                      </Text>
+                    </View>
+                    <View style={styles.scheduleItem}>
+                      <FontAwesome name="clock-o" size={16} color="#fff" />
+                      <Text style={styles.scheduleText}>
+                        {schedule.duration_minutes} minutes
+                      </Text>
+                    </View>
+                    <View style={styles.scheduleItem}>
+                      <FontAwesome name="star" size={16} color="#fff" />
+                      <Text style={styles.scheduleText}>
+                        Max: {schedule.max_marks} | Pass: {schedule.passing_marks}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.scheduleItem}>
-                    <FontAwesome name="clock-o" size={16} color="#fff" />
-                    <Text style={styles.scheduleText}>
-                      {schedule.duration_minutes} minutes
-                    </Text>
-                  </View>
-                  <View style={styles.scheduleItem}>
-                    <FontAwesome name="star" size={16} color="#fff" />
-                    <Text style={styles.scheduleText}>
-                      Max: {schedule.max_marks} | Pass: {schedule.passing_marks}
-                    </Text>
-                  </View>
-                </View>
-              </LinearGradient>
-            ))}
+                </LinearGradient>
+              ))
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No schedule data available</Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.chartContainer}>
             <Text style={styles.sectionTitle}>Performance Overview</Text>
             <LineChart
-              data={marksData}
-              width={width - 40}
+              data={getChartData()}
+              width={width - 48}
               height={220}
               chartConfig={{
                 backgroundColor: '#fff',
@@ -309,18 +393,24 @@ const ExamScheduleApp: React.FC = () => {
                   borderRadius: 16,
                 },
                 propsForDots: {
-                  r: '6',
+                  r: '4',
                   strokeWidth: '2',
-                  stroke: '#fff'
+                  stroke: THEME.colors.gradient.primary[0]
                 },
                 propsForBackgroundLines: {
                   strokeDasharray: '',
                   strokeWidth: 1,
                   strokeColor: THEME.colors.border.light,
                 },
+                formatYLabel: (value: string) => Math.round(Number(value)).toString(),
               }}
               bezier
               style={styles.chart}
+              withInnerLines={true}
+              withOuterLines={true}
+              withVerticalLines={false}
+              withHorizontalLines={true}
+              fromZero={true}
             />
           </View>
 
@@ -334,20 +424,29 @@ const ExamScheduleApp: React.FC = () => {
   );
 
   return (
-    <LinearGradient
-      colors={['#F8FAFC', '#F1F5F9']}
-      style={styles.container}
-    >
-      <Text style={styles.header}>Your Exams</Text>
-      <FlatList
-        data={examData}
-        renderItem={({ item }) => renderExamCard(item)}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.examList}
-        showsVerticalScrollIndicator={false}
-      />
-      <ExamDetailsModal />
-    </LinearGradient>
+    <ScrollView style={styles.container}>
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={THEME.colors.text.accent} />
+          <Text style={styles.loadingText}>Loading exams...</Text>
+        </View>
+      ) : (
+        <>
+          {examData && examData.length > 0 ? (
+            examData.map((exam) => (
+              <React.Fragment key={`exam-${exam.id}`}>
+                {renderExamCard(exam)}
+              </React.Fragment>
+            ))
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No exams found</Text>
+            </View>
+          )}
+          <ExamDetailsModal />
+        </>
+      )}
+    </ScrollView>
   );
 };
 
@@ -435,42 +534,76 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: '#F8FAFC',
   },
   modalHeader: {
-    padding: 24,
-    paddingTop: Platform.OS === 'ios' ? 48 : 24,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    ...THEME.shadows.large,
+    padding: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 20,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+  },
+  modalHeaderContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   modalTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: THEME.colors.text.light,
+    color: '#fff',
+    flex: 1,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 4,
+  },
+  closeButton: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    padding: 8,
+    borderRadius: 20,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalContent: {
-    backgroundColor: '#fff',
-    padding: 24,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    marginTop: -30,
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    marginTop: -20,
+    paddingHorizontal: 16,
+  },
+  modalScrollContent: {
+    paddingTop: 24,
+    paddingBottom: 40,
+    gap: 24,
   },
   scheduleContainer: {
     width: '100%',
   },
   sectionTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: THEME.colors.text.primary,
-    marginBottom: 20,
-    letterSpacing: 0.5,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 16,
   },
   scheduleCard: {
-    padding: 20,
-    borderRadius: 20,
-    marginBottom: 16,
-    ...THEME.shadows.small,
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   subjectName: {
     fontSize: 16,
@@ -497,13 +630,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   chartContainer: {
-    width: '100%',
     backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 20,
-    ...THEME.shadows.medium,
-    borderWidth: 1,
-    borderColor: THEME.colors.border.light,
+    borderRadius: 16,
+    padding: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   chart: {
     marginVertical: 8,
@@ -513,13 +647,14 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   tableContainer: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    ...THEME.shadows.medium,
     backgroundColor: '#fff',
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: THEME.colors.border.light,
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   tableHeader: {
     flexDirection: 'row',
@@ -537,7 +672,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: THEME.colors.border.light,
     backgroundColor: '#fff',
   },
   rowText: {
@@ -546,11 +681,26 @@ const styles = StyleSheet.create({
     color: THEME.colors.text.primary,
     fontSize: 15,
   },
-  closeButton: {
-    backgroundColor: THEME.colors.surface.light,
-    padding: 12,
-    borderRadius: 12,
-  }
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: THEME.colors.gradient.background[0],
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: THEME.colors.text.secondary,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: THEME.colors.text.secondary,
+  },
 });
 
 export default ExamScheduleApp;

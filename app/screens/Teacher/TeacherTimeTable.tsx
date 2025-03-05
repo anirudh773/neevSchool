@@ -78,7 +78,7 @@ const TeacherWeeklyTimetable = () => {
     try {
       setIsLoading(true)
       const response = await fetch(
-        `https://testcode-2.onrender.com/school/getTeacherTimetable?schoolId=${schoolId}&teacherId=${teacherId}`
+        `http://13.202.16.149:8080/school/getTeacherTimetable?schoolId=${schoolId}&teacherId=${teacherId}`
       )
       const result: TeacherTimetableResponse = await response.json()
       

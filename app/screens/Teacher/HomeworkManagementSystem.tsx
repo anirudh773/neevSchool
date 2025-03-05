@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   TextInput,
   Image,
   Alert,
-  Platform,
   Modal,
 } from 'react-native';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
@@ -19,6 +18,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { ActivityIndicator, Surface } from 'react-native-paper';
 import * as SecureStore from 'expo-secure-store';
 import { useFocusEffect } from 'expo-router';
+import { storage } from '../../../firebaseConfig';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 interface HomeworkItem {
   id: string;
@@ -48,6 +49,45 @@ interface Class {
     sections: Section[];
   }
 
+interface HomeworkStats {
+  submitted: number;
+  notSubmitted: number;
+  total: number;
+}
+
+interface Subject {
+  id: number;
+  name: string;
+  description: string;
+}
+
+interface FormattedSubject {
+  label: string;
+  value: string;
+}
+
+interface HomeworkResponse {
+  id: number;
+  description: string;
+  teacherId: number;
+  homeWorkDate: string;
+  imgUrl: string;
+  docUrl: string;
+  className: string;
+  sectionName: string;
+  subjectName: string;
+}
+
+interface HomeworkStatsResponse {
+  sectionId: number;
+  sectionName: string;
+  className: string;
+  totalTeachers: number;
+  submittedCount: number;
+  pendingCount: number;
+  totalStudents: number;
+}
+
 const TeacherHomeworkManager: React.FC = () => {
     const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClass, setSelectedClass] = useState<string>('');
@@ -59,107 +99,244 @@ const TeacherHomeworkManager: React.FC = () => {
   const [documentUri, setDocumentUri] = useState<string>('');
   const [documentName, setDocumentName] = useState<string>('');
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
-  const [homeworkList, setHomeworkList] = useState<HomeworkItem[]>([]);
+  const [homeworkList, setHomeworkList] = useState<HomeworkResponse[]>([]);
   const [editMode, setEditMode] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<string>('');
   const [showClassPicker, setShowClassPicker] = useState<boolean>(false);
   const [showSectionPicker, setShowSectionPicker] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  const [subjects, setSubjects] = useState<FormattedSubject[]>([]);
+  const [homeworkStats, setHomeworkStats] = useState<HomeworkStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
+  const [selectedSectionId, setSelectedSectionId] = useState<number | null>(null);
+  const [isLoadingList, setIsLoadingList] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [imageUrl, setImageUrl] = useState('');
+  const [docUrl, setDocUrl] = useState('');
 
-
-  const sections: PickerItemProps[] = [
-    { label: 'Section A', value: 'A' },
-    { label: 'Section B', value: 'B' },
-    { label: 'Section C', value: 'C' },
-  ];
-
-  const subjects: PickerItemProps[] = [
-    { label: 'Mathematics', value: 'math' },
-    { label: 'Science', value: 'science' },
-    { label: 'English', value: 'english' },
-  ];
   useFocusEffect(
     useCallback(() => {
-      loadClassesData();
+      loadInitialData();
     }, [])
   );
 
 
+  const loadInitialData = async () => {
+    try {
+      setLoading(true);
+      await Promise.all([
+        loadClassesData(),
+        loadSubjectsData()
+      ]);
+    } catch (error) {
+      console.error('Error loading initial data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadClassesData = async () => {
     try {
       setLoading(true);
-      const classesData = await SecureStore.getItemAsync('schoolClasses');
+      const userData = await SecureStore.getItemAsync('userData');
+      if (!userData) {
+        throw new Error('User data not found');
+      }
+
+      const { role } = JSON.parse(userData);
+      // Get classes based on role
+      const classesKey = role === 2 ? 'teacherClasses' : 'schoolClasses';
+      const classesData = await SecureStore.getItemAsync(classesKey);
+
       if (classesData) {
         const parsedData = JSON.parse(classesData);
         setClasses(parsedData || []);
       }
-    } catch (err) {
+    } catch (error) {
+      console.error('Error loading classes:', error);
+      Alert.alert('Error', 'Failed to load classes');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  const loadSubjectsData = async () => {
+    try {
+      setLoading(true);
+      const userData = await SecureStore.getItemAsync('userData');
+      if (!userData) {
+        throw new Error('User data not found');
+      }
+
+      const { schoolId } = JSON.parse(userData);
+
+      const response = await fetch(
+        `http://13.202.16.149:8080/school/getSchoolSubjects?schoolId=${schoolId}`,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const result = await response.json();
+      if (result.success && Array.isArray(result.data)) {
+        const formattedSubjects: FormattedSubject[] = result.data
+          .filter((subject: Subject) => 
+            subject && typeof subject.id === 'number' && typeof subject.name === 'string'
+          )
+          .map((subject: Subject) => ({
+            label: subject.name,
+            value: String(subject.id)
+          }));
+        setSubjects(formattedSubjects);
+      } else {
+        throw new Error(result.message || 'Failed to fetch subjects');
+      }
+    } catch (error) {
+      console.error('Error loading subjects:', error);
+      Alert.alert('Error', 'Failed to load subjects');
     } finally {
       setLoading(false);
     }
   };
 
   const pickImage = async (): Promise<void> => {
-    const result = await launchImageLibraryAsync({
-      mediaTypes: MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
-    });
+    try {
+      setUploadingImage(true);
+      const result = await launchImageLibraryAsync({
+        mediaTypes: MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 1,
+      });
 
-    if (!result.canceled) {
-      setImageUri(result.assets[0].uri);
+      if (!result.canceled && result.assets[0]) {
+        const uri = result.assets[0].uri;
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        
+        const timestamp = Date.now();
+        const fileName = uri.split('/').pop() || '';
+        const storageRef = ref(storage, `homework/images/${timestamp}_${fileName}`);
+        
+        await uploadBytes(storageRef, blob);
+        const downloadUrl = await getDownloadURL(storageRef);
+        
+        setImageUri(uri); // For preview
+        setImageUrl(downloadUrl); // For API
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to upload image');
+      console.error(error);
+    } finally {
+      setUploadingImage(false);
     }
   };
 
   const pickDocument = async (): Promise<void> => {
     try {
+      setUploadingDoc(true);
       const result = await getDocumentAsync({
         type: '*/*',
         multiple: false,
       });
 
-      if (!result.canceled) {
-        const asset = result.assets[0];
-        setDocumentUri(asset.uri);
-        setDocumentName(asset.name);
+      if (!result.canceled && result.assets[0]) {
+        const uri = result.assets[0].uri;
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        
+        const timestamp = Date.now();
+        const fileName = result.assets[0].name;
+        const storageRef = ref(storage, `homework/documents/${timestamp}_${fileName}`);
+        
+        await uploadBytes(storageRef, blob);
+        const downloadUrl = await getDownloadURL(storageRef);
+        
+        setDocumentUri(uri); // For preview
+        setDocumentName(fileName);
+        setDocUrl(downloadUrl); // For API
       }
-    } catch (err) {
-      Alert.alert('Error', 'Failed to pick document');
-      console.error('Document picking error:', err);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to upload document');
+      console.error(error);
+    } finally {
+      setUploadingDoc(false);
     }
   };
 
-  const handleCreateHomework = (): void => {
-    if (!selectedClass || !selectedSection || !selectedSubject || !description) {
+  const fetchHomeworkList = async () => {
+    try {
+      setIsLoadingList(true);
+      const userData = await SecureStore.getItemAsync('userData');
+      if (!userData) return;
+      
+      const { schoolId, teacherId } = JSON.parse(userData);
+      const response = await fetch(
+        `http://13.202.16.149:8080/school/getHomeWork?schoolId=${schoolId}&sectionId=${selectedSectionId}&teacherId=${teacherId}`,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      const result = await response.json();
+      if (result.success) {
+        setHomeworkList(result.data);
+      }
+    } catch (error) {
+      console.error('Error fetching homework:', error);
+      Alert.alert('Error', 'Failed to fetch homework list');
+    } finally {
+      setIsLoadingList(false);
+    }
+  };
+
+  const handleCreateHomework = async (): Promise<void> => {
+    if (!selectedClassId || !selectedSectionId || !selectedSubject || !description) {
       Alert.alert('Error', 'Please fill all required fields');
       return;
     }
 
-    const newHomework: HomeworkItem = {
-      id: editMode ? editingId : Date.now().toString(),
-      class: selectedClass,
-      section: selectedSection,
-      subject: selectedSubject,
-      date: selectedDate,
-      description,
-      imageUri,
-      documentUri,
-      documentName,
-    };
+    try {
+      setLoading(true);
+      const userData = await SecureStore.getItemAsync('userData');
+      if (!userData) return;
+      
+      let { schoolId, teacherId } = JSON.parse(userData);
 
-    if (editMode) {
-      setHomeworkList(prevList =>
-        prevList.map(item => (item.id === editingId ? newHomework : item))
-      );
-      setEditMode(false);
-      setEditingId('');
-    } else {
-      setHomeworkList(prevList => [...prevList, newHomework]);
+      const response = await fetch('http://13.202.16.149:8080/school/createHomeWork', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          schoolId,
+          teacherId,
+          classId: selectedClassId,
+          sectionId: selectedSectionId,
+          subjectId: +selectedSubject,
+          description,
+          imgUrl: imageUrl,
+          docUrl: docUrl
+        }),
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        Alert.alert('Success', 'Homework created successfully');
+        resetForm();
+        fetchHomeworkList();
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to create homework');
+    } finally {
+      setLoading(false);
     }
-
-    resetForm();
   };
 
   const resetForm = (): void => {
@@ -173,20 +350,18 @@ const TeacherHomeworkManager: React.FC = () => {
     setDocumentName('');
   };
 
-  const handleEdit = (homework: HomeworkItem): void => {
+  const handleEdit = (homework: HomeworkResponse): void => {
     setEditMode(true);
-    setEditingId(homework.id);
-    setSelectedClass(homework.class);
-    setSelectedSection(homework.section);
-    setSelectedSubject(homework.subject);
-    setSelectedDate(homework.date);
+    setEditingId(homework.id.toString());
+    setSelectedClass(homework.className);
+    setSelectedSection(homework.sectionName);
+    setSelectedSubject(homework.subjectName);
     setDescription(homework.description);
-    setImageUri(homework.imageUri || '');
-    setDocumentUri(homework.documentUri || '');
-    setDocumentName(homework.documentName || '');
+    setImageUri(homework.imgUrl);
+    setDocumentUri(homework.docUrl);
   };
 
-  const handleDelete = (id: string): void => {
+  const handleDelete = (id: number): void => {
     Alert.alert(
       'Delete Homework',
       'Are you sure you want to delete this homework?',
@@ -203,36 +378,165 @@ const TeacherHomeworkManager: React.FC = () => {
     );
   };
 
-  const renderStatsGrid = () => {
-    let homeWorkStats = {
-      teacherSubmitHomeWork: 2,
-      teacherNotSubmitted: 2
-    };
+  const fetchHomeworkStats = async () => {
+    if (!selectedClassId || !selectedSectionId) {
+      return;
+    }
 
-    if (!homeWorkStats) {
+    try {
+      setStatsLoading(true);
+      const userData = await SecureStore.getItemAsync('userData');
+      if (!userData) {
+        return;
+      }
+      
+      const { schoolId } = JSON.parse(userData);
+      
+      const response = await fetch(
+        `http://13.202.16.149:8080/school/getHomeworkStats?schoolId=${schoolId}&sectionId=${selectedSectionId}&classId=${selectedClassId}`,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      const result = await response.json();
+
+      if (result.success && result.data.length > 0) {
+        const stats = result.data[0];
+        setHomeworkStats({
+          submitted: stats.submittedCount,
+          notSubmitted: stats.pendingCount,
+          total: stats.totalStudents
+        });
+      } else {
+        setHomeworkStats({
+          submitted: 0,
+          notSubmitted: 0,
+          total: 0
+        });
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to fetch homework statistics');
+      setHomeworkStats(null);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  const handleClassSelect = (classId: number, className: string): void => {
+    setSelectedClassId(classId);
+    setSelectedClass(className);
+    setSelectedSection('');
+    setSelectedSectionId(null);
+    setHomeworkStats(null);
+    setShowClassPicker(false);
+  };
+
+  const handleSectionSelect = (sectionId: number, sectionName: string): void => {
+    setSelectedSectionId(sectionId);
+    setSelectedSection(sectionName);
+    setShowSectionPicker(false);
+    setTimeout(() => fetchHomeworkStats(), 100);
+  };
+
+  const getSelectedClassSections = () => {
+    if (!selectedClassId) return [];
+    const selectedClass = classes.find(cls => cls.id === selectedClassId);
+    return selectedClass?.sections || [];
+  };
+
+  const renderStatsGrid = () => {
+    if (!selectedClassId || !selectedSectionId) {
       return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3b82f6" />
+        <View style={styles.emptyStatsContainer}>
+          <Text style={styles.emptyStatsText}>
+            Select class and section to view homework statistics
+          </Text>
         </View>
       );
     }
 
-    const stats = {
-      teacherSubmitHomeWork: homeWorkStats.teacherSubmitHomeWork ?? 0,
-      teacherNotSubmitted: homeWorkStats.teacherNotSubmitted ?? 0
-    };
+    if (statsLoading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3b82f6" />
+          <Text style={styles.loadingText}>Loading statistics...</Text>
+        </View>
+      );
+    }
+
+    if (!homeworkStats) {
+      return (
+        <View style={styles.emptyStatsContainer}>
+          <Text style={styles.emptyStatsText}>
+            No statistics available
+          </Text>
+        </View>
+      );
+    }
 
     return (
-      <View style={styles.statsGrid}>
-        <Surface style={[styles.statsCard, { backgroundColor: '#4CAF50' }]}>
-          <Text style={styles.statsNumber}>{stats.teacherSubmitHomeWork}</Text>
-          <Text style={styles.statsLabel}>Teacher's Submited</Text>
-        </Surface>
-        <Surface style={[styles.statsCard, { backgroundColor: '#2196F3' }]}>
-          <Text style={styles.statsNumber}>{stats.teacherNotSubmitted}</Text>
-          <Text style={styles.statsLabel}>Teachers's not Submitted</Text>
-        </Surface>
+      <View style={styles.statsContainer}>
+        <Text style={styles.statsHeader}>
+          Homework Statistics for Class {selectedClass} - Section {selectedSection}
+        </Text>
+        <View style={styles.statsGrid}>
+          <Surface style={[styles.statsCard, { backgroundColor: '#4CAF50' }]}>
+            <Text style={styles.statsNumber}>{homeworkStats.submitted}</Text>
+            <Text style={styles.statsLabel}>Submitted</Text>
+          </Surface>
+          <Surface style={[styles.statsCard, { backgroundColor: '#F44336' }]}>
+            <Text style={styles.statsNumber}>{homeworkStats.notSubmitted}</Text>
+            <Text style={styles.statsLabel}>Pending</Text>
+          </Surface>
+          <Surface style={[styles.statsCard, { backgroundColor: '#2196F3' }]}>
+            <Text style={styles.statsNumber}>{homeworkStats.total}</Text>
+            <Text style={styles.statsLabel}>Total Students</Text>
+          </Surface>
+        </View>
       </View>
+    );
+  };
+
+  useEffect(() => {
+    if (selectedSectionId) {
+      fetchHomeworkList();
+    }
+  }, [selectedSectionId]);
+
+  useEffect(() => {
+    if (selectedClassId && selectedSectionId) {
+      fetchHomeworkStats();
+    }
+  }, [selectedClassId, selectedSectionId]);
+
+  const formatDate = (date: Date): string => {
+    return date.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  };
+
+  const handleSubjectChange = (value: string) => {
+    setSelectedSubject(value);
+  };
+
+  const renderSubmitButton = () => {
+    return (
+      <TouchableOpacity
+        style={[styles.submitButton, loading && styles.disabledButton]}
+        onPress={handleCreateHomework}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator color="#fff" size="small" />
+        ) : (
+          <Text style={styles.submitButtonText}>Submit Homework</Text>
+        )}
+      </TouchableOpacity>
     );
   };
 
@@ -247,11 +551,7 @@ const TeacherHomeworkManager: React.FC = () => {
         <Text style={styles.label}>Date</Text>
         <View style={styles.dateDisplay}>
             <Text style={styles.dateButtonText}>
-            {selectedDate.toLocaleDateString('en-GB', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-            })}
+            {formatDate(selectedDate)}
             </Text>
         </View>
         </View>
@@ -286,15 +586,15 @@ const TeacherHomeworkManager: React.FC = () => {
           <View style={styles.pickerWrapper}>
             <Picker
               selectedValue={selectedSubject}
-              onValueChange={setSelectedSubject}
+              onValueChange={handleSubjectChange}
               style={styles.picker}
             >
               <Picker.Item label="Select Subject" value="" />
-              {subjects.map(item => (
+              {subjects.map(subject => (
                 <Picker.Item
-                  key={item.value}
-                  label={item.label}
-                  value={item.value}
+                  key={subject.value}
+                  label={subject.label}
+                  value={subject.value}
                 />
               ))}
             </Picker>
@@ -365,58 +665,64 @@ const TeacherHomeworkManager: React.FC = () => {
           ) : null}
         </View>
 
-        <TouchableOpacity
-          style={styles.submitButton}
-          onPress={handleCreateHomework}
-        >
-          <Text style={styles.submitButtonText}>
-            {editMode ? 'Update Homework' : 'Create Homework'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.formContainer}>
+          {renderSubmitButton()}
+        </View>
 
         <View style={styles.listContainer}>
           <Text style={styles.listHeader}>Today's Homework</Text>
-          {homeworkList.map(homework => (
-            <View key={homework.id} style={styles.homeworkCard}>
-              <View style={styles.homeworkInfo}>
-                <Text style={styles.homeworkClass}>
-                  Class {homework.class} - Section {homework.section}
-                </Text>
-                <Text style={styles.homeworkSubject}>{homework.subject}</Text>
-                <Text style={styles.homeworkDescription}>
-                  {homework.description}
-                </Text>
-                {homework.imageUri && (
-                  <Image
-                    source={{ uri: homework.imageUri }}
-                    style={styles.homeworkImage}
-                  />
-                )}
-                {homework.documentName && (
-                  <View style={styles.attachedDocument}>
-                    <FontAwesome name="file-text" size={20} color="#4A90E2" />
-                    <Text style={styles.attachedDocumentName}>
-                      {homework.documentName}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.editButton]}
-                  onPress={() => handleEdit(homework)}
-                >
-                  <FontAwesome name="edit" size={20} color="#fff" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.deleteButton]}
-                  onPress={() => handleDelete(homework.id)}
-                >
-                  <FontAwesome name="trash" size={20} color="#fff" />
-                </TouchableOpacity>
-              </View>
+          {isLoadingList ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#3b82f6" />
+              <Text style={styles.loadingText}>Loading homework...</Text>
             </View>
-          ))}
+          ) : homeworkList.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No homework assigned yet</Text>
+            </View>
+          ) : (
+            homeworkList.map(homework => (
+              <View key={homework.id} style={styles.homeworkCard}>
+                <View style={styles.homeworkInfo}>
+                  <Text style={styles.homeworkClass}>
+                    Class {homework.className} - Section {homework.sectionName}
+                  </Text>
+                  <Text style={styles.homeworkSubject}>{homework.subjectName}</Text>
+                  <Text style={styles.homeworkDescription}>
+                    {homework.description}
+                  </Text>
+                  {homework.imgUrl && (
+                    <Image
+                      source={{ uri: homework.imgUrl }}
+                      style={styles.homeworkImage}
+                    />
+                  )}
+                  {homework.docUrl && (
+                    <View style={styles.attachedDocument}>
+                      <FontAwesome name="file-text" size={20} color="#4A90E2" />
+                      <Text style={styles.attachedDocumentName}>
+                        Attached Document
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.actionButtons}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.editButton]}
+                    onPress={() => handleEdit(homework)}
+                  >
+                    <FontAwesome name="edit" size={20} color="#fff" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.deleteButton]}
+                    onPress={() => handleDelete(homework.id)}
+                  >
+                    <FontAwesome name="trash" size={20} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))
+          )}
         </View>
 
         <Modal
@@ -431,15 +737,11 @@ const TeacherHomeworkManager: React.FC = () => {
               <ScrollView>
                 {classes.map(cls => (
                   <TouchableOpacity
-                    key={cls.name}
+                    key={`class-${cls.id}`}
                     style={styles.pickerItem}
-                    onPress={() => {
-                      setSelectedClass(cls.name);
-                      setSelectedSection('');
-                      setShowClassPicker(false);
-                    }}
+                    onPress={() => handleClassSelect(cls.id, cls.name)}
                   >
-                    <Text style={styles.pickerItemText}>Class:- {cls.name}</Text>
+                    <Text style={styles.pickerItemText}>Class {cls.name}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -463,16 +765,13 @@ const TeacherHomeworkManager: React.FC = () => {
             <View style={styles.pickerCard}>
               <Text style={styles.pickerTitle}>Select Section</Text>
               <ScrollView>
-                {sections.map(section => (
+                {getSelectedClassSections().map(section => (
                   <TouchableOpacity
-                    key={section.value}
+                    key={`section-${section.id}`}
                     style={styles.pickerItem}
-                    onPress={() => {
-                      setSelectedSection(section.value);
-                      setShowSectionPicker(false);
-                    }}
+                    onPress={() => handleSectionSelect(section.id, section.name)}
                   >
-                    <Text style={styles.pickerItemText}>{section.label}</Text>
+                    <Text style={styles.pickerItemText}>Section {section.name}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -510,34 +809,56 @@ const styles = StyleSheet.create({
         marginVertical: 24,
         textAlign: 'center',
     },
+    statsContainer: {
+      padding: 16,
+      backgroundColor: '#fff',
+      borderRadius: 12,
+      marginBottom: 20,
+    },
+    statsHeader: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: '#1f2937',
+      marginBottom: 16,
+      textAlign: 'center',
+    },
     statsGrid: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 24,
-        gap: 12,
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      flexWrap: 'wrap',
+      gap: 12,
     },
     statsCard: {
-        flex: 1,
-        padding: 20,
-        borderRadius: 16,
-        elevation: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
+      flex: 1,
+      minWidth: 100,
+      padding: 16,
+      borderRadius: 12,
+      alignItems: 'center',
+      elevation: 2,
     },
     statsNumber: {
-        fontSize: 32,
-        fontWeight: '800',
-        color: '#fff',
-        textAlign: 'center',
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: '#fff',
+      marginBottom: 4,
     },
     statsLabel: {
-        fontSize: 14,
-        color: '#fff',
-        marginTop: 8,
-        textAlign: 'center',
-        fontWeight: '600',
+      fontSize: 12,
+      color: '#fff',
+      opacity: 0.9,
+    },
+    emptyStatsContainer: {
+      padding: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#f3f4f6',
+      borderRadius: 12,
+      marginBottom: 20,
+    },
+    emptyStatsText: {
+      color: '#6b7280',
+      fontSize: 14,
+      textAlign: 'center',
     },
     selectors: {
         flexDirection: 'row',
@@ -871,6 +1192,29 @@ const styles = StyleSheet.create({
     removeDocument: {
         padding: 8,
         borderRadius: 20,
+    },
+    loadingText: {
+        marginTop: 8,
+        color: '#666',
+        fontSize: 14,
+    },
+    emptyContainer: {
+        padding: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#f8f9fa',
+        borderRadius: 12,
+    },
+    emptyText: {
+        fontSize: 16,
+        color: '#666',
+        textAlign: 'center',
+    },
+    formContainer: {
+        marginBottom: 24,
+    },
+    disabledButton: {
+        opacity: 0.7,
     },
 });
 

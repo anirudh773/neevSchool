@@ -8,7 +8,7 @@ interface HomeworkSubmission {
   class: string
   section: string
   subject: string
-  date: Date
+  date: string
   description: string
   imageUri?: string
   documentUri?: string
@@ -18,24 +18,28 @@ interface HomeworkSubmission {
 
 interface TodaysSubmissionsProps {
   submissions: HomeworkSubmission[]
-  selectedDate?: Date
+  selectedDate?: Date,
+  pending: number
 }
 
 const TodaysSubmissions: React.FC<TodaysSubmissionsProps> = ({ 
   submissions,
-  selectedDate = new Date() 
+  selectedDate = new Date(),
+  pending
 }) => {
   const [selectedHomework, setSelectedHomework] = useState<HomeworkSubmission | null>(null)
   const [modalVisible, setModalVisible] = useState(false)
 
-  const filteredSubmissions = submissions.filter(submission => {
-    const submissionDate = new Date(submission.date)
-    return (
-      submissionDate.getDate() === selectedDate.getDate() &&
-      submissionDate.getMonth() === selectedDate.getMonth() &&
-      submissionDate.getFullYear() === selectedDate.getFullYear()
-    )
-  })
+  const formatDateToMatch = (date: Date): string => {
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  const filteredSubmissions = submissions.filter(submission => 
+    submission.date === formatDateToMatch(selectedDate)
+  );
 
   const handleRowPress = (submission: HomeworkSubmission) => {
     setSelectedHomework(submission)
@@ -65,7 +69,7 @@ const TodaysSubmissions: React.FC<TodaysSubmissionsProps> = ({
               <FontAwesome name="clock-o" size={24} color="#FFA000" />
             </View>
             <Text style={styles.statNumber}>
-              {filteredSubmissions.filter(s => s.status === "Pending").length}
+              {pending}
             </Text>
             <Text style={styles.statLabel}>Pending</Text>
           </View>

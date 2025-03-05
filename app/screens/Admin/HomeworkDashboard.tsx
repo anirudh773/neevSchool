@@ -1,101 +1,160 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, TouchableOpacity, Dimensions, ActivityIndicator } from "react-native"
-import { Appbar, Title, Text, Surface } from "react-native-paper"
+import { Text, Surface } from "react-native-paper"
 import DateTimePicker from '@react-native-community/datetimepicker';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import StatsSummary from "../../../components/StatsSummary"
 import TodaysSubmissions from "../../../components/TodaysSubmissions"
+import * as SecureStore from 'expo-secure-store';
+import { Alert } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
+
+// Update the interfaces
+interface Stats {
+  totalHomeWork: number;
+  activeTeachers: number;
+  totalClasses: number;
+  submitted: number;
+  pending: number;
+}
 
 interface HomeworkSubmission {
   id: string;
   class: string;
   section: string;
   subject: string;
-  date: Date;
+  date: string;
   description: string;
-  imageUri?: string;
-  documentUri?: string;
-  documentName?: string;
   status: "Submitted" | "Pending";
 }
 
+interface DashboardData {
+  totalSubmissionStats: {
+    totalHomeWork: number;
+    activeTeachers: number;
+    totalClasses: number;
+  };
+  todaysHomework: {
+    submitted: number;
+    pending: number;
+  };
+  submissions: Array<{
+    id: number;
+    class: string;
+    section: string;
+    subject: string;
+    date: string;
+    description: string;
+    status: "Submitted" | "Pending";
+  }>;
+}
+
 const HomeworkDashboard: React.FC = () => {
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [homeworkSubmissions, setHomeworkSubmissions] = useState<HomeworkSubmission[]>([]);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [stats, setStatsData] = useState<Stats>({
+    totalHomeWork: 0,
+    activeTeachers: 0,
+    totalClasses: 0,
+    submitted: 0,
+    pending: 0
+  });
+  const [formattedSubmissions, setFormattedSubmissions] = useState<HomeworkSubmission[]>([]);
 
   useEffect(() => {
-    fetchSubmissionsForDate(new Date());
-  }, []);
+    fetchDashboardData(selectedDate);
+  }, [selectedDate]);
 
-  const onDateChange = (event: any, selected: Date | undefined) => {
+  const onDateChange = (_: any, selected: Date | undefined) => {
     setShowDatePicker(false);
     if (selected) {
       setSelectedDate(selected);
-      fetchSubmissionsForDate(selected);
     }
   };
 
-  const fetchSubmissionsForDate = (date: Date) => {
-    // Mock data with more realistic examples
-    const mockSubmissions: HomeworkSubmission[] = [
-      {
-        id: '1',
-        class: '10',
-        section: 'A',
-        subject: 'Mathematics',
-        date: date,
-        description: 'Solve Quadratic Equations (Chapter 4, Ex 4.2)',
-        status: 'Submitted',
-      },
-      {
-        id: '2',
-        class: '9',
-        section: 'B',
-        subject: 'Physics',
-        date: date,
-        description: 'Newton\'s Laws of Motion Assignment',
-        status: 'Pending',
-      },
-      {
-        id: '3',
-        class: '10',
-        section: 'C',
-        subject: 'Chemistry',
-        date: date,
-        description: 'Periodic Table Elements Quiz Preparation',
-        status: 'Submitted',
-      },
-      {
-        id: '4',
-        class: '8',
-        section: 'A',
-        subject: 'Biology',
-        date: date,
-        description: 'Draw and Label Plant Cell Diagram',
-        status: 'Pending',
-      },
-      {
-        id: '5',
-        class: '9',
-        section: 'A',
-        subject: 'English',
-        date: date,
-        description: 'Write an Essay on Environmental Conservation',
-        status: 'Submitted',
-      }
-    ];
-
-    setHomeworkSubmissions(mockSubmissions);
+  const formatDate = (date: Date): string => {
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}-${month}-${year}`;
   };
+
+  const fetchDashboardData = async (date: Date) => {
+    try {
+      setIsLoading(true);
+      const userData = await SecureStore.getItemAsync('userData');
+      if (!userData) return;
+
+      const { schoolId } = JSON.parse(userData);
+      const formattedDate = formatDate(date);
+
+      const response = await fetch(
+        `http://13.202.16.149:8080/school/getHomeworkDashboard?schoolId=${schoolId}&date=${formattedDate}`,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const result = await response.json();
+      if (result.success && result.data) {
+        const data = result.data;
+        setDashboardData(data);
+
+        // Update stats
+        setStatsData({
+          totalHomeWork: data.totalSubmissionStats.totalHomeWork,
+          activeTeachers: data.totalSubmissionStats.activeTeachers,
+          totalClasses: data.totalSubmissionStats.totalClasses,
+          submitted: data.todaysHomework.submitted,
+          pending: data.todaysHomework.pending
+        });
+
+        // Update submissions
+        const formattedData = data.submissions.map((sub: {
+          id: number;
+          class: string;
+          section: string;
+          subject: string;
+          date: string;
+          description: string;
+          status: "Submitted" | "Pending";
+        }) => ({
+          id: String(sub.id),
+          class: sub.class,
+          section: sub.section,
+          subject: sub.subject,
+          date: sub.date,
+          description: sub.description,
+          status: sub.status
+        }));
+        setFormattedSubmissions(formattedData);
+      }
+      // console.log(formattedSubmissions)
+    } catch (error) {
+      Alert.alert('Error', 'Failed to fetch dashboard data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#3b82f6" />
+        <Text style={styles.loadingText}>Loading dashboard data...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <Surface style={styles.headerCard}>
-        <Text style={styles.headerTitle}>Homework Dashboard</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.dateSelector}
           onPress={() => setShowDatePicker(true)}
         >
@@ -120,25 +179,26 @@ const HomeworkDashboard: React.FC = () => {
         />
       )}
 
-      <ScrollView 
+      <ScrollView
         style={styles.contentContainer}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        bounces={true}
       >
         <Surface style={styles.statsCard}>
-          <StatsSummary />
+          <StatsSummary stats={stats} />
         </Surface>
-        
+
         <Surface style={styles.submissionsCard}>
-          <TodaysSubmissions submissions={homeworkSubmissions} />
+          <TodaysSubmissions 
+            submissions={formattedSubmissions} 
+            selectedDate={selectedDate}
+            pending = {stats.pending}
+          />
         </Surface>
-        
-        <View style={styles.bottomSpacing} />
       </ScrollView>
     </View>
-  )
-}
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -154,12 +214,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     zIndex: 2,
-  },
-  headerTitle: {
-    fontSize: Math.min(24, width * 0.06),
-    fontWeight: 'bold',
-    color: '#1A237E',
-    marginBottom: 12,
   },
   dateSelector: {
     flexDirection: 'row',
@@ -205,10 +259,18 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     minHeight: Math.min(200, height * 0.3),
   },
-  bottomSpacing: {
-    height: 20,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
   },
-})
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  }
+});
 
-export default HomeworkDashboard
+export default HomeworkDashboard;
 

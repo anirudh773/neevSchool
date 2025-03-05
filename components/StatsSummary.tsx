@@ -3,35 +3,32 @@ import { View, StyleSheet } from "react-native"
 import { Surface } from "react-native-paper"
 import { Text } from "react-native"
 
-interface Stats {
-  totalSubmissions: number
-  totalTeachers: number
-  totalSubjects: number
+interface StatsSummaryProps {
+  stats: {
+    totalHomeWork: number;
+    activeTeachers: number;
+    totalClasses: number;
+    submitted: number;
+    pending: number;
+  }
 }
 
-const StatsSummary: React.FC = () => {
-  // In a real app, you'd fetch this data from an API
-  const stats: Stats = {
-    totalSubmissions: 150,
-    totalTeachers: 25,
-    totalSubjects: 8,
-  }
-
+const StatsSummary: React.FC<StatsSummaryProps> = ({ stats }) => {
   return (
     <View style={styles.container}>
       <Surface style={[styles.card, { backgroundColor: '#4CAF50' }]}>
-        <Text style={styles.number}>{stats.totalSubmissions}</Text>
-        <Text style={styles.label}>Total Submissions</Text>
+        <Text style={styles.number}>{stats.totalHomeWork}</Text>
+        <Text style={styles.label}>Total Homework</Text>
       </Surface>
       
       <Surface style={[styles.card, { backgroundColor: '#2196F3' }]}>
-        <Text style={styles.number}>{stats.totalTeachers}</Text>
+        <Text style={styles.number}>{stats.activeTeachers}</Text>
         <Text style={styles.label}>Active Teachers</Text>
       </Surface>
       
       <Surface style={[styles.card, { backgroundColor: '#9C27B0' }]}>
-        <Text style={styles.number}>{stats.totalSubjects}</Text>
-        <Text style={styles.label}>Total Subjects</Text>
+        <Text style={styles.number}>{stats.totalClasses}</Text>
+        <Text style={styles.label}>Total Classes</Text>
       </Surface>
     </View>
   )

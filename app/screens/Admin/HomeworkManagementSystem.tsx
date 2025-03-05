@@ -48,6 +48,12 @@ interface Class {
     sections: Section[];
   }
 
+interface Subject {
+  id: number;
+  name: string;
+  description: string;
+}
+
 const TeacherHomeworkManager: React.FC = () => {
     const [classes, setClasses] = useState<Class[]>([]);
   const [selectedClass, setSelectedClass] = useState<string>('');
@@ -65,6 +71,7 @@ const TeacherHomeworkManager: React.FC = () => {
   const [showClassPicker, setShowClassPicker] = useState<boolean>(false);
   const [showSectionPicker, setShowSectionPicker] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  const [subjects, setSubjects] = useState<PickerItemProps[]>([]);
 
 
   const sections: PickerItemProps[] = [
@@ -73,14 +80,15 @@ const TeacherHomeworkManager: React.FC = () => {
     { label: 'Section C', value: 'C' },
   ];
 
-  const subjects: PickerItemProps[] = [
-    { label: 'Mathematics', value: 'math' },
-    { label: 'Science', value: 'science' },
-    { label: 'English', value: 'english' },
-  ];
+  // const subjects: PickerItemProps[] = [
+  //   { label: 'Mathematics', value: 'math' },
+  //   { label: 'Science', value: 'science' },
+  //   { label: 'English', value: 'english' },
+  // ];
   useFocusEffect(
     useCallback(() => {
       loadClassesData();
+      loadSubjectsData();
     }, [])
   );
 
@@ -95,6 +103,43 @@ const TeacherHomeworkManager: React.FC = () => {
       }
     } catch (err) {
 
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadSubjectsData = async () => {
+    try {
+      setLoading(true);
+      const userData = await SecureStore.getItemAsync('userData');
+      if (!userData) {
+        throw new Error('User data not found');
+      }
+
+      const { schoolId } = JSON.parse(userData);
+
+      const response = await fetch(
+        `http://13.202.16.149:8080/school/getSchoolSubjects?schoolId=${schoolId}`,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const result = await response.json();
+      if (result.success) {
+        const formattedSubjects = result.data.map((subject: Subject) => ({
+          label: subject.name,
+          value: subject.id.toString()
+        }));
+        setSubjects(formattedSubjects);
+      } else {
+        throw new Error(result.message || 'Failed to fetch subjects');
+      }
+    } catch (error) {
+      console.error('Error loading subjects:', error);
+      Alert.alert('Error', 'Failed to load subjects');
     } finally {
       setLoading(false);
     }

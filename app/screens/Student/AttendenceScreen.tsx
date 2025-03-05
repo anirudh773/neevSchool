@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
+import * as SecureStore from 'expo-secure-store';
 
 // Type Definitions
 interface AttendanceRecord {
@@ -37,6 +38,15 @@ interface ApiResponse {
     overall: SummaryData;
     thisMonth: SummaryData;
   };
+}
+
+interface UserInfo {
+  id: number;
+  userId: string;
+  schoolId: number;
+  name: string | null;
+  role: number;
+  teacherId: number | null;
 }
 
 // Color Constants
@@ -114,11 +124,19 @@ const AttendanceCalendar: React.FC = () => {
       try {
         setLoading(true);
         const year = selectedDate.getFullYear();
-        const month = selectedDate.getMonth() + 1; // API uses 1-indexed months
-        const studentId = '10'; // Replace with actual student ID
+        const month = selectedDate.getMonth() + 1;
+
+        // Get user data from SecureStore
+        const userData = await SecureStore.getItemAsync('userData');
+        if (!userData) {
+          throw new Error('User data not found');
+        }
+
+        const userInfo: UserInfo = JSON.parse(userData);
+        const studentId = userInfo.id; // Use the id from userInfo
 
         const response = await fetch(
-          `https://testcode-2.onrender.com/school/getAttendaceByStudentId?studentId=${studentId}&year=${year}&month=${month}`,
+          `http://13.202.16.149:8080/school/getAttendaceByStudentId?studentId=${studentId}&year=${year}&month=${month}`,
           {
             method: 'GET',
             headers: {
