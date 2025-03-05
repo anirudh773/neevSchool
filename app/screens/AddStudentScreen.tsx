@@ -109,32 +109,7 @@ const AddStudentScreen = () => {
             },
             style: 'default'
           }
-        ],
-        {
-          cancelable: false,
-          overlayStyle: {
-            backgroundColor: 'rgba(0,0,0,0.5)',
-          },
-          containerStyle: {
-            backgroundColor: 'white',
-            borderRadius: 16,
-            padding: 24,
-            alignItems: 'center',
-            width: '80%',
-          },
-          titleStyle: {
-            fontSize: 20,
-            fontWeight: 'bold',
-            color: '#1F2937', // gray-800
-            marginBottom: 8,
-          },
-          messageStyle: {
-            fontSize: 16,
-            color: '#4B5563', // gray-600
-            textAlign: 'center',
-            marginBottom: 24,
-          }
-        }
+        ]
       );
     } catch (error) {
       setLoading(false)
