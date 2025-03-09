@@ -59,8 +59,6 @@ const HolidayListView: React.FC = () => {
       );
       const result = await response.json();
 
-      console.log('Holidays response:', result);
-
       if (result.success) {
         const formattedHolidays = result.data.map((holiday: Holiday) => ({
           ...holiday,

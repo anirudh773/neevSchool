@@ -1,3 +1,7 @@
+import React from 'react';
+import { Animated, View, Text } from 'react-native';
+
+// Define interfaces as types only
 export interface Schedule {
     id: number;
     subject_id: number;
@@ -27,4 +31,15 @@ export interface ExamScheduleCardProps {
     onToggle: () => void;
     onViewDetails: () => void;
     onEdit: () => void;
-} 
+}
+
+// Create a real React component as default export
+const ExamTypesComponent: React.FC = () => {
+    return (
+        <View>
+            <Text>Exam Types Component</Text>
+        </View>
+    );
+};
+
+export default ExamTypesComponent; 

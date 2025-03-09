@@ -14,14 +14,15 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as SecureStore from 'expo-secure-store';
-import { Class } from '@/constants/types';
 
 interface Section {
   id: number;
   name: string;
 }
 
-interface ClassData extends Class {
+interface ClassData {
+  id: number;
+  name: string;
   sections: Section[];
 }
 
@@ -70,8 +71,6 @@ const ClassSectionsScreen = () => {
           
           const allClasses: ClassData[] = JSON.parse(classesData);
 
-          console.log(userInfo)
-
           if (userInfo.role === 2 && userInfo.classTeacherDetails) {
             // Filter classes for class teacher
             const teacherClass = allClasses.find(c => 
@@ -109,7 +108,6 @@ const ClassSectionsScreen = () => {
   };
 
   const handleSectionPress = (classId: number, sectionId: number, className: string, sectionName: string) => {
-    console.log('////////////////////changes', className, sectionName)
     router.push({
         pathname: '/screens/StudentListScreen',
         params: { classId, sectionId, className, sectionName }

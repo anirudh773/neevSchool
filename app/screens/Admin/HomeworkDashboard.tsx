@@ -134,7 +134,6 @@ const HomeworkDashboard: React.FC = () => {
         }));
         setFormattedSubmissions(formattedData);
       }
-      // console.log(formattedSubmissions)
     } catch (error) {
       Alert.alert('Error', 'Failed to fetch dashboard data');
     } finally {

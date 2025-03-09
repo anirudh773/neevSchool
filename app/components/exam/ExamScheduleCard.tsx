@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Animated } from 'react-native';
 import { Surface } from 'react-native-paper';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { styles } from './ExamScheduleCard.styles';
+import styles from './ExamScheduleCard.styles';
 import { ExamScheduleCardProps } from '@/types/exam';
 
 const getStatusColor = (status: 'Ongoing' | 'Upcoming' | 'Completed'): string => {

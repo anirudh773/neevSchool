@@ -208,7 +208,6 @@ const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
                 }))
             };
 
-            console.log(JSON.stringify(examData))
 
               const response = await fetch('http://13.202.16.149:8080/school/submitExamBySchoolId', {
                 method: 'POST',

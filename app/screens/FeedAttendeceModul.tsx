@@ -82,7 +82,6 @@ const AttendanceAnalytics: React.FC = () => {
 		try {
 			const startDate = '2025-01-01';
 			const endDate = '2025-01-26';
-			console.log(`http://13.202.16.149:8080/school/getAttendaceBySectionId?sectionId=${sectionId}&startDate=${startDate}&endDate=${endDate}`)
 			setLoading(true);
 
 			const response = await fetch(

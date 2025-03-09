@@ -87,7 +87,6 @@ const StudentListScreen = () => {
       address: selectedStudent.address,
       email: selectedStudent.email
     }
-    console.log(obj, selectedStudent.id)
 
     try {
       setLoading(true);
@@ -99,7 +98,6 @@ const StudentListScreen = () => {
         body: JSON.stringify(obj),
       });
 
-      console.log(response)
       if (response.ok) {
         Alert.alert('Success', 'Student updated successfully');
         setEditModalVisible(false);

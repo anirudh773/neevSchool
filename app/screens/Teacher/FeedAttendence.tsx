@@ -125,7 +125,6 @@ const TeacherAttendanceManagement: React.FC = () => {
       });
 
       const data = await response.json();
-      console.log(data)
       
       if (data.success) {
         const presentCount = Object.values(attendanceStatuses).filter(status => status === 'PRESENT').length;

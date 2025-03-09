@@ -152,8 +152,6 @@ const HolidayList: React.FC = () => {
         endDate: formatDate(newHoliday.endDate)
       };
 
-      console.log(holidayData)
-
       const url = isEditMode 
         ? `http://13.202.16.149:8080/school/updateHoliday/${newHoliday.id}`
         : 'http://13.202.16.149:8080/school/addHoliday';

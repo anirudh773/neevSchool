@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native';
 
-export const styles = StyleSheet.create({
+const styles = StyleSheet.create({
     examCard: {
         backgroundColor: '#fff',
         borderRadius: 12,
@@ -103,4 +103,6 @@ export const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '500',
     },
-}); 
+});
+
+export default styles; 

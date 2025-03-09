@@ -215,7 +215,7 @@ const LoginPage = () => {
 
     // Set up notification listeners
     const foregroundSubscription = Notifications.addNotificationReceivedListener(notification => {
-      console.log('Received notification:', notification);
+      
     });
 
     const backgroundSubscription = Notifications.addNotificationResponseReceivedListener(response => {
@@ -263,8 +263,6 @@ const LoginPage = () => {
       });
 
       const data = await response.json();
-
-      console.log(data, "ddsdsds")
 
       if (response.ok) {
         // Store all tokens and data
