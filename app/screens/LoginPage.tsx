@@ -242,13 +242,15 @@ const LoginPage = () => {
     
     try {
       // Get push token
-      const pushToken = await registerForPushNotificationsAsync();
-      console.log('Push Token:', pushToken);
+      // const pushToken = await registerForPushNotificationsAsync();
 
       // Store push token
-      if (pushToken) {
-        await SecureStore.setItemAsync('pushToken', pushToken);
-      }
+      // if (pushToken) {
+      //   await SecureStore.setItemAsync('pushToken', pushToken);
+      // }
+
+
+      Alert.alert('login');
 
       const response = await fetch('http://13.202.16.149:8080/school/login', {
         method: 'POST',
@@ -257,12 +259,13 @@ const LoginPage = () => {
         },
         body: JSON.stringify({
           userId,
-          password,
-          // pushToken, // Send token to backend
+          password
         }),
       });
 
       const data = await response.json();
+
+      Alert.alert('login', data.token);
 
       if (response.ok) {
         // Store all tokens and data
@@ -272,9 +275,9 @@ const LoginPage = () => {
           SecureStore.setItemAsync('userPermission', JSON.stringify(data.permission))
         ];
 
-        if (pushToken) {
-          storagePromises.push(SecureStore.setItemAsync('pushToken', pushToken));
-        }
+        // if (pushToken) {
+        //   storagePromises.push(SecureStore.setItemAsync('pushToken', pushToken));
+        // }
 
         await Promise.all(storagePromises);
 
@@ -286,14 +289,14 @@ const LoginPage = () => {
         }
         
         // Send test notification
-        await sendTestNotification();
+        // await sendTestNotification();
         
         router.replace('../(tab)');
       } else {
         Alert.alert('Error', data.message || 'Login failed. Please try again.');
       }
     } catch (error) {
-      console.error('Login Error:', error);
+      console.log(JSON.stringify(error))
       Alert.alert('Error', 'Something went wrong! Please try again later.');
     } finally {
       setLoading(false);
