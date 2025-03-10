@@ -117,7 +117,7 @@ const RegisterTeacher: React.FC = () => {
 
       // If no cached data, fetch from API
       const response = await fetch(
-        `http://13.202.16.149:8080/school/getExamMasterData?schoolId=${userData.schoolId}`,
+        `https://13.202.16.149:8080/school/getExamMasterData?schoolId=${userData.schoolId}`,
         {
           headers: {
             'Content-Type': 'application/json'
@@ -241,7 +241,7 @@ const RegisterTeacher: React.FC = () => {
         schoolId: userData.schoolId // Use dynamic schoolId here
       };
 
-      const response = await fetch('http://13.202.16.149:8080/school/addTeacher', {
+      const response = await fetch('https://13.202.16.149:8080/school/addTeacher', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dataToSubmit),

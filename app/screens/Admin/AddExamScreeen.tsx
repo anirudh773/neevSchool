@@ -209,7 +209,7 @@ const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
             };
 
 
-              const response = await fetch('http://13.202.16.149:8080/school/submitExamBySchoolId', {
+              const response = await fetch('https://13.202.16.149:8080/school/submitExamBySchoolId', {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',

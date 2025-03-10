@@ -138,7 +138,7 @@ const RegisterTeacher: React.FC = () => {
   // Handle form submission
   const handleSubmit = async () => {
     try {
-      const response = await fetch('http://13.202.16.149:8080/school/addTeacher', {
+      const response = await fetch('https://13.202.16.149:8080/school/addTeacher', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(teacherData),

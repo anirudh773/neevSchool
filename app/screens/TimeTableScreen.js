@@ -99,7 +99,7 @@ const TimeTableManager = () => {
     try {
       setIsLoading(prev => ({ ...prev, timetable: true }));
       const response = await fetch(
-        `http://13.202.16.149:8080/school/getSchoolTimetable?schoolId=1&classId=${classId}&sectionId=${sectionId}`
+        `https://13.202.16.149:8080/school/getSchoolTimetable?schoolId=1&classId=${classId}&sectionId=${sectionId}`
       );
       const result = await response.json();
       
@@ -149,7 +149,7 @@ const TimeTableManager = () => {
     try {
       setIsLoading(prev => ({ ...prev, update: true }));
       const response = await fetch(
-        `http://13.202.16.149:8080/school/updateSchoolTimetable/${entryId}`,
+        `https://13.202.16.149:8080/school/updateSchoolTimetable/${entryId}`,
         {
           method: 'PUT',
           headers: {
@@ -260,7 +260,7 @@ const TimeTableManager = () => {
       const { schoolId } = JSON.parse(userData);
 
       const response = await fetch(
-        `http://13.202.16.149:8080/school/getSchudeleMasterData?schoolId=${schoolId}`,
+        `https://13.202.16.149:8080/school/getSchudeleMasterData?schoolId=${schoolId}`,
         {
           headers: {
             'Content-Type': 'application/json'
@@ -359,7 +359,7 @@ const TimeTableManager = () => {
       };
 
       const response = await fetch(
-        `http://13.202.16.149:8080/school/submitSchoolSchudele?schoolId=${schoolId}`,
+        `https://13.202.16.149:8080/school/submitSchoolSchudele?schoolId=${schoolId}`,
         {
           method: 'POST',
           headers: {

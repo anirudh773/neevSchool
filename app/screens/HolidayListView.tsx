@@ -55,7 +55,7 @@ const HolidayListView: React.FC = () => {
       
       const userData = JSON.parse(userDataStr);
       const response = await fetch(
-        `http://13.202.16.149:8080/school/getHolidayBySchoolId?schoolId=${userData.schoolId}`
+        `https://13.202.16.149:8080/school/getHolidayBySchoolId?schoolId=${userData.schoolId}`
       );
       const result = await response.json();
 

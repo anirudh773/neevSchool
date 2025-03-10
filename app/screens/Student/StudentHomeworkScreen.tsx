@@ -99,7 +99,7 @@ const StudentHomeworkScreen: React.FC = () => {
       const formattedDate = formatDate(date);
       
       const response = await fetch(
-        `http://13.202.16.149:8080/school/getStudentHomework?schoolId=${user.schoolId}&studentId=${user.id}&date=${formattedDate}`,
+        `https://13.202.16.149:8080/school/getStudentHomework?schoolId=${user.schoolId}&studentId=${user.id}&date=${formattedDate}`,
         {
           headers: {
             'Content-Type': 'application/json'

@@ -173,7 +173,7 @@ const TeacherHomeworkManager: React.FC = () => {
       const { schoolId } = JSON.parse(userData);
 
       const response = await fetch(
-        `http://13.202.16.149:8080/school/getSchoolSubjects?schoolId=${schoolId}`,
+        `https://13.202.16.149:8080/school/getSchoolSubjects?schoolId=${schoolId}`,
         {
           headers: {
             'Content-Type': 'application/json'
@@ -276,7 +276,7 @@ const TeacherHomeworkManager: React.FC = () => {
       
       const { schoolId, teacherId } = JSON.parse(userData);
       const response = await fetch(
-        `http://13.202.16.149:8080/school/getHomeWork?schoolId=${schoolId}&sectionId=${selectedSectionId}&teacherId=${teacherId}`,
+        `https://13.202.16.149:8080/school/getHomeWork?schoolId=${schoolId}&sectionId=${selectedSectionId}&teacherId=${teacherId}`,
         {
           headers: {
             'Content-Type': 'application/json'
@@ -309,7 +309,7 @@ const TeacherHomeworkManager: React.FC = () => {
       
       let { schoolId, teacherId } = JSON.parse(userData);
 
-      const response = await fetch('http://13.202.16.149:8080/school/createHomeWork', {
+      const response = await fetch('https://13.202.16.149:8080/school/createHomeWork', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -393,7 +393,7 @@ const TeacherHomeworkManager: React.FC = () => {
       const { schoolId } = JSON.parse(userData);
       
       const response = await fetch(
-        `http://13.202.16.149:8080/school/getHomeworkStats?schoolId=${schoolId}&sectionId=${selectedSectionId}&classId=${selectedClassId}`,
+        `https://13.202.16.149:8080/school/getHomeworkStats?schoolId=${schoolId}&sectionId=${selectedSectionId}&classId=${selectedClassId}`,
         {
           headers: {
             'Content-Type': 'application/json'

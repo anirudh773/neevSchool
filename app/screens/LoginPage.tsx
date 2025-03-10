@@ -242,17 +242,14 @@ const LoginPage = () => {
     
     try {
       // Get push token
-      // const pushToken = await registerForPushNotificationsAsync();
+      const pushToken = await registerForPushNotificationsAsync();
 
       // Store push token
-      // if (pushToken) {
-      //   await SecureStore.setItemAsync('pushToken', pushToken);
-      // }
+      if (pushToken) {
+        await SecureStore.setItemAsync('pushToken', pushToken);
+      }
 
-
-      Alert.alert('login');
-
-      const response = await fetch('http://13.202.16.149:8080/school/login', {
+      const response = await fetch(`https://13.202.16.149:8080/school/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -265,8 +262,6 @@ const LoginPage = () => {
 
       const data = await response.json();
 
-      Alert.alert('login', data.token);
-
       if (response.ok) {
         // Store all tokens and data
         const storagePromises = [
@@ -275,9 +270,9 @@ const LoginPage = () => {
           SecureStore.setItemAsync('userPermission', JSON.stringify(data.permission))
         ];
 
-        // if (pushToken) {
-        //   storagePromises.push(SecureStore.setItemAsync('pushToken', pushToken));
-        // }
+        if (pushToken) {
+          storagePromises.push(SecureStore.setItemAsync('pushToken', pushToken));
+        }
 
         await Promise.all(storagePromises);
 
@@ -289,7 +284,7 @@ const LoginPage = () => {
         }
         
         // Send test notification
-        // await sendTestNotification();
+        await sendTestNotification();
         
         router.replace('../(tab)');
       } else {

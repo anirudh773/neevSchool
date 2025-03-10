@@ -73,7 +73,7 @@ const StudentMarksEntry = () => {
   const fetchStudents = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`http://13.202.16.149:8080/school/getStudentBySection?sectionId=${sectionId}`);
+      const response = await fetch(`https://13.202.16.149:8080/school/getStudentBySection?sectionId=${sectionId}`);
       const data = await response.json();
       if (data.success) {
         setAllStudents(data.data);
@@ -186,7 +186,7 @@ const StudentMarksEntry = () => {
       let examSchId = JSON.parse(exam as string);
       examSchId = examSchId.find(obj => obj.subject_id===selectedSubject)
   
-      const response = await fetch(`http://13.202.16.149:8080/school/submitExamMarks?examScId=${examSchId.id}`, {
+      const response = await fetch(`https://13.202.16.149:8080/school/submitExamMarks?examScId=${examSchId.id}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

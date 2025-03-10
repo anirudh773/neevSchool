@@ -119,7 +119,7 @@ const TeacherHomeworkManager: React.FC = () => {
       const { schoolId } = JSON.parse(userData);
 
       const response = await fetch(
-        `http://13.202.16.149:8080/school/getSchoolSubjects?schoolId=${schoolId}`,
+        `https://13.202.16.149:8080/school/getSchoolSubjects?schoolId=${schoolId}`,
         {
           headers: {
             'Content-Type': 'application/json'

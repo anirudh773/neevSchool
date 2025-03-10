@@ -457,7 +457,7 @@ const TeacherListing: React.FC = () => {
     const fetchTeachers = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`http://13.202.16.149:8080/school/getTeachersBySchoolId?schoolId=${schoolId}`);
+            const response = await fetch(`https://13.202.16.149:8080/school/getTeachersBySchoolId?schoolId=${schoolId}`);
             const data = await response.json();
             if (data.success) {
                 setTeachers(data.data);
@@ -479,7 +479,7 @@ const TeacherListing: React.FC = () => {
                 return parsedSubjects;
             }
 
-            const response = await fetch(`http://13.202.16.149:8080/school/getExamMasterData?schoolId=${schoolId}`);
+            const response = await fetch(`https://13.202.16.149:8080/school/getExamMasterData?schoolId=${schoolId}`);
             const data = await response.json();
             if (data.success) {
                 const newSubjects = data.data.subjectBySchool;
@@ -501,7 +501,7 @@ const TeacherListing: React.FC = () => {
                     setClasses(JSON.parse(classesData));
                 }
 
-                const response = await fetch(`http://13.202.16.149:8080/school/getSchudeleMasterData?schoolId=${schoolId}`);
+                const response = await fetch(`https://13.202.16.149:8080/school/getSchudeleMasterData?schoolId=${schoolId}`);
                 const result = await response.json();
                 
                 if (result.success) {
@@ -550,7 +550,7 @@ const TeacherListing: React.FC = () => {
                     style: "destructive",
                     onPress: async () => {
                         try {
-                            const response = await fetch(`http://13.202.16.149:8080/school/updateTeacher/${teacher.id}`, {
+                            const response = await fetch(`https://13.202.16.149:8080/school/updateTeacher/${teacher.id}`, {
                                 method: 'PUT',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ isActive: false })
@@ -577,7 +577,7 @@ const TeacherListing: React.FC = () => {
         try {
             setEditLoading(true);
             if(updateData && updateData.classTeacherOf) updateData.classTeacherOf = +updateData.classTeacherOf
-            const response = await fetch(`http://13.202.16.149:8080/school/updateTeacher/${editingTeacher.id}`, {
+            const response = await fetch(`https://13.202.16.149:8080/school/updateTeacher/${editingTeacher.id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
