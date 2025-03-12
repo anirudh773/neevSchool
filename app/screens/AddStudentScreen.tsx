@@ -74,7 +74,7 @@ const AddStudentScreen = () => {
         gender: formData.gender === 'male' ? 1 : formData.gender === 'female' ? 2 : 3,
       };
 
-      const response = await fetch('https://13.202.16.149:8080/school/addStudent', {
+      const response = await fetch('https://neevschool.sbs/school/addStudent', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

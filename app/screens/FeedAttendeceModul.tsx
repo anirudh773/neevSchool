@@ -85,7 +85,7 @@ const AttendanceAnalytics: React.FC = () => {
 			setLoading(true);
 
 			const response = await fetch(
-				`https://13.202.16.149:8080/school/getAttendaceBySectionId?sectionId=${sectionId}&startDate=${startDate}&endDate=${endDate}`
+				`https://neevschool.sbs/school/getAttendaceBySectionId?sectionId=${sectionId}&startDate=${startDate}&endDate=${endDate}`
 			);
 
 			if (!response.ok) {

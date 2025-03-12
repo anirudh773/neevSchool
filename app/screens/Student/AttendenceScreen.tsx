@@ -136,7 +136,7 @@ const AttendanceCalendar: React.FC = () => {
         const studentId = userInfo.id; // Use the id from userInfo
 
         const response = await fetch(
-          `https://13.202.16.149:8080/school/getAttendaceByStudentId?studentId=${studentId}&year=${year}&month=${month}`,
+          `https://neevschool.sbs/school/getAttendaceByStudentId?studentId=${studentId}&year=${year}&month=${month}`,
           {
             method: 'GET',
             headers: {

@@ -80,7 +80,7 @@ const YourTimetable = () => {
   const fetchMasterData = async (userInfo: UserInfo) => {
     try {
       const response = await fetch(
-        `https://13.202.16.149:8080/school/getSchudeleMasterData?schoolId=${userInfo.schoolId}`
+        `https://neevschool.sbs/school/getSchudeleMasterData?schoolId=${userInfo.schoolId}`
       )
       const result = await response.json()
       
@@ -101,7 +101,7 @@ const YourTimetable = () => {
       const { classId, sectionId } = studentClass
 
       const response = await fetch(
-        `https://13.202.16.149:8080/school/getSchoolTimetable?schoolId=${schoolId}&classId=${classId}&sectionId=${sectionId}`
+        `https://neevschool.sbs/school/getSchoolTimetable?schoolId=${schoolId}&classId=${classId}&sectionId=${sectionId}`
       )
       const result = await response.json()
       if (result.success) {

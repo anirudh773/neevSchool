@@ -8,7 +8,6 @@ import {
   Modal, 
   TextInput, 
   ScrollView,
-  Dimensions,
   Alert,
   Animated,
   useWindowDimensions,
@@ -19,8 +18,6 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as SecureStore from 'expo-secure-store';
-import { Surface } from 'react-native-paper';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
 
 // Types
 interface Holiday {
@@ -74,7 +71,7 @@ const HolidayList: React.FC = () => {
       if (!userDataStr) throw new Error('User data not found');
       
       const userData = JSON.parse(userDataStr);
-      const response = await fetch(`https://13.202.16.149:8080/school/getHolidayBySchoolId?schoolId=${userData.schoolId}`);
+      const response = await fetch(`https://neevschool.sbs/school/getHolidayBySchoolId?schoolId=${userData.schoolId}`);
       const result = await response.json();
 
       if (result.success) {
@@ -153,8 +150,8 @@ const HolidayList: React.FC = () => {
       };
 
       const url = isEditMode 
-        ? `https://13.202.16.149:8080/school/updateHoliday/${newHoliday.id}`
-        : 'https://13.202.16.149:8080/school/addHoliday';
+        ? `https://neevschool.sbs/school/updateHoliday/${newHoliday.id}`
+        : 'https://neevschool.sbs/school/addHoliday';
 
       const response = await fetch(url, {
         method: isEditMode ? 'PUT' : 'POST',
@@ -193,7 +190,7 @@ const HolidayList: React.FC = () => {
           onPress: async () => {
             try {
               setActionLoading(true);
-              const response = await fetch(`https://13.202.16.149:8080/school/updateHoliday/${holidayId}`, {
+              const response = await fetch(`https://neevschool.sbs/school/updateHoliday/${holidayId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ isActive: false })

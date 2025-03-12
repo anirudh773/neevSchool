@@ -163,7 +163,7 @@ const ExamScheduleApp: React.FC = () => {
       const { classId, sectionId } = studentClass;
 
       const response = await fetch(
-        `https://13.202.16.149:8080/school/getStudentExams?schoolId=${schoolId}&classId=${classId}&sectionId=${sectionId}&studentId=${studentId}`
+        `https://neevschool.sbs/school/getStudentExams?schoolId=${schoolId}&classId=${classId}&sectionId=${sectionId}&studentId=${studentId}`
       );
       const result: ApiResponse = await response.json();
 

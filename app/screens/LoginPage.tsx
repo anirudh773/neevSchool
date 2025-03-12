@@ -234,69 +234,60 @@ const LoginPage = () => {
 
   const handleLogin = async () => {
     if (!userId || !password) {
-      Alert.alert('Error', 'Please enter both User ID and Password.');
-      return;
+        Alert.alert('Error', 'Please enter both User ID and Password.');
+        return;
     }
 
     setLoading(true);
-    
+
     try {
-      // Get push token
-      const pushToken = await registerForPushNotificationsAsync();
+        // Get and store push token
+        const pushToken = await registerForPushNotificationsAsync();
+        if (pushToken) await SecureStore.setItemAsync('pushToken', pushToken);
 
-      // Store push token
-      if (pushToken) {
-        await SecureStore.setItemAsync('pushToken', pushToken);
-      }
+        // API call to login endpoint
+        const response = await fetch('https://neevschool.sbs/school/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, password }),
+        });
 
-      const response = await fetch(`https://13.202.16.149:8080/school/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId,
-          password
-        }),
-      });
+        // Handle non-JSON response safely
+        const data = await response.json().catch(() => ({}));
 
-      const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.message || 'Login failed. Please try again.');
+        }
 
-      if (response.ok) {
-        // Store all tokens and data
+        // Store tokens and user data securely
         const storagePromises = [
-          SecureStore.setItemAsync('userToken', data.token),
-          SecureStore.setItemAsync('userData', JSON.stringify(data.userInfo)),
-          SecureStore.setItemAsync('userPermission', JSON.stringify(data.permission))
+            SecureStore.setItemAsync('userToken', data.token),
+            SecureStore.setItemAsync('userData', JSON.stringify(data.userInfo)),
+            SecureStore.setItemAsync('userPermission', JSON.stringify(data.permission))
         ];
 
-        if (pushToken) {
-          storagePromises.push(SecureStore.setItemAsync('pushToken', pushToken));
-        }
+        if (pushToken) storagePromises.push(SecureStore.setItemAsync('pushToken', pushToken));
 
         await Promise.all(storagePromises);
 
-        if(data.userInfo && data.userInfo.role == 2){
-          await SecureStore.setItemAsync('teacherClasses', JSON.stringify(data.teacherClasses));
+        // Role-specific storage logic
+        if (data.userInfo?.role === 2) {
+            await SecureStore.setItemAsync('teacherClasses', JSON.stringify(data.teacherClasses));
+        } else if ([1, 2].includes(data.userInfo?.role)) {
+            await SecureStore.setItemAsync('schoolClasses', JSON.stringify(data.classes));
         }
-        else if(data.userInfo && [1,2].includes(data.userInfo.role)){
-          await SecureStore.setItemAsync('schoolClasses',JSON.stringify(data.classes));
-        }
-        
+
         // Send test notification
         await sendTestNotification();
-        
+
         router.replace('../(tab)');
-      } else {
-        Alert.alert('Error', data.message || 'Login failed. Please try again.');
-      }
     } catch (error) {
-      console.log(JSON.stringify(error))
-      Alert.alert('Error', 'Something went wrong! Please try again later.');
+        console.error('Login Error:', error);
+        Alert.alert('Error', error.message || 'Something went wrong! Please try again later.');
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
-  };
+};
 
   const handlePasswordVisibility = () => {
     setShowPassword(!showPassword);

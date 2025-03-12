@@ -58,7 +58,7 @@ const StudentListScreen = () => {
   const fetchStudents = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`https://13.202.16.149:8080/school/getStudentBySection?sectionId=${sectionId}`);
+      const response = await fetch(`https://neevschool.sbs/school/getStudentBySection?sectionId=${sectionId}`);
       const data = await response.json();
       if (data.success) {
         setStudents(data.data);
@@ -90,7 +90,7 @@ const StudentListScreen = () => {
 
     try {
       setLoading(true);
-      const response = await fetch(`https://13.202.16.149:8080/school/updateStudent?studentId=${selectedStudent.id}`, {
+      const response = await fetch(`https://neevschool.sbs/school/updateStudent?studentId=${selectedStudent.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -128,7 +128,7 @@ const StudentListScreen = () => {
           onPress: async () => {
             try {
               setLoading(true);
-              const response = await fetch(`https://13.202.16.149:8080/school/updateStudent?studentId=${studentId}`, {
+              const response = await fetch(`https://neevschool.sbs/school/updateStudent?studentId=${studentId}`, {
                 method: 'PUT',
                 headers: {
                   'Content-Type': 'application/json',

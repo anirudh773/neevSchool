@@ -22,7 +22,8 @@
       "package": "com.neevlearn.app",
       "permissions": [
         "NOTIFICATIONS"
-      ]
+      ],
+      "usesCleartextTraffic": true
     },
     "web": {
       "bundler": "metro",
@@ -31,7 +32,17 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "manifest": {
+              "usesCleartextTraffic": true
+            }
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
@@ -42,7 +53,7 @@
         "origin": false
       },
       "eas": {
-        "projectId": "ed022fed-6677-489c-bdee-95721d4b8734"
+        "projectId": "5f60753c-7b66-4fb8-872c-b6172aea6cc6"
       }
     }
   }
