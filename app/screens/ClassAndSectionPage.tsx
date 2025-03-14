@@ -108,11 +108,13 @@ const ClassSectionsScreen = () => {
   };
 
   const handleSectionPress = (classId: number, sectionId: number, className: string, sectionName: string) => {
-    router.push({
-        pathname: '/screens/StudentListScreen',
-        params: { classId, sectionId, className, sectionName }
-      });
+    // Close modal first before navigating to avoid race conditions
     setModalVisible(false);
+    
+    // Add slight delay for animation to complete before navigation
+    setTimeout(() => {
+      router.push(`/screens/StudentListScreen?classId=${classId}&sectionId=${sectionId}&className=${encodeURIComponent(className)}&sectionName=${encodeURIComponent(sectionName)}`);
+    }, 100);
   };
 
   const renderClassCard = (classItem: ClassData) => (

@@ -442,16 +442,16 @@ const TimeTableManager = () => {
       {(isLoading.timetable || isLoading.update) && <LoadingOverlay />}
       <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <TouchableOpacity
+          {/* <TouchableOpacity
             onPress={() => router.back()}
             style={styles.backButton}
           >
             <FontAwesome name="arrow-left" size={20} color="#64748b" />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
           
           <View style={styles.headerContent}>
             <Text style={styles.cardTitle}>Timetable Management</Text>
-            <Text style={styles.cardSubtitle}>Manage class schedules and assignments</Text>
+            <Text style={styles.cardSubtitle}>Assign teacher to your class</Text>
           </View>
 
           {selectedClass && selectedSection && (
@@ -807,7 +807,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardTitle: {
-    fontSize: 24,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#333',
   },

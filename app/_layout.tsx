@@ -20,7 +20,7 @@ export default function RootLayout() {
       <Stack.Screen name="screens/ClassAndSectionPage" options={{ title: 'Your Classes', headerShown: true }} />
       <Stack.Screen name="screens/StudentListScreen" options={{ title: 'Students', headerShown: true }} />
       <Stack.Screen name="screens/AddStudentScreen" options={{ title: 'Add Student', headerShown: false }} />
-      <Stack.Screen name="screens/TimeTableScreen" options={{ title: 'Time Table Create', headerShown: false }} />
+      <Stack.Screen name="screens/TimeTableScreen" options={{ title: 'Create Time Table', headerShown: true }} />
       <Stack.Screen name="screens/HoliDayScreenn" options={{ title: 'List holiday', headerShown: true }} />
       <Stack.Screen name="screens/Admin/CheckAttendence" options={{ title: 'Attendence', headerShown: true }} />
       <Stack.Screen name="screens/Admin/ExamSystem" options={{ title: 'Admin exam', headerShown: true }} />
@@ -43,6 +43,9 @@ export default function RootLayout() {
           headerShown: true 
         }} 
       />
+      <Stack.Screen name="screens/Admin/Profile" options={{ title: 'Profile'}} />
+      <Stack.Screen name="screens/Teacher/Profile" options={{ title: 'Profile' }} />
+      <Stack.Screen name="screens/Student/Profile" options={{ title: 'Profile' }} />
     </Stack>
     
   );

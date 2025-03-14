@@ -154,42 +154,50 @@ const LoginPage = () => {
 
   // Function to register for push notifications
   async function registerForPushNotificationsAsync() {
-    let token;
+    try {
+      let token;
 
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('default', {
-        name: 'default',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#FF231F7C',
-      });
-    }
-
-    if (Device.isDevice) {
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-      
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'default',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#FF231F7C',
+        });
       }
-      
-      if (finalStatus !== 'granted') {
-        alert('Failed to get push token for push notification!');
-        return;
-      }
-      token = 'xyz'
-      
-      // token = (await Notifications.getExpoPushTokenAsync({
-      //   projectId: 'your-project-id-here'
-      // })).data;
-    } else {
-      // Return a test token for emulator
-      token = 'EMULATOR-TEST-TOKEN-' + Date.now();
-      console.log('Using emulator - generated test token:', token);
-    }
 
-    return token;
+      if (Device.isDevice) {
+        const { status: existingStatus } = await Notifications.getPermissionsAsync();
+        let finalStatus = existingStatus;
+        
+        if (existingStatus !== 'granted') {
+          const { status } = await Notifications.requestPermissionsAsync();
+          finalStatus = status;
+        }
+        
+        if (finalStatus !== 'granted') {
+          console.log('Failed to get push token for push notification!');
+          return null;
+        }
+
+        try {
+          // Get the token that uniquely identifies this device
+          // token = (await Notifications.getExpoPushTokenAsync({
+          //   projectId: '5f60753c-7b66-4fb8-872c-b6172aea6cc6'
+          // })).data;
+          token = 'xyz'
+        } catch (error) {
+          return null;
+        }
+      } else {
+        // Return a test token for emulator
+        token = 'EMULATOR-TEST-TOKEN-' + Date.now();
+      }
+
+      return token;
+    } catch (error) {
+      return null;
+    }
   }
 
   // Function to send test notification
@@ -215,14 +223,15 @@ const LoginPage = () => {
 
     // Set up notification listeners
     const foregroundSubscription = Notifications.addNotificationReceivedListener(notification => {
-      
+      console.log('Received foreground notification:', notification);
     });
 
     const backgroundSubscription = Notifications.addNotificationResponseReceivedListener(response => {
       console.log('Background notification tapped:', response);
-      // You can handle navigation here if needed
-      // const screen = response.notification.request.content.data.screen;
-      // router.push(screen);
+      const screen = response.notification.request.content.data.screen;
+      if (screen) {
+        router.push(screen);
+      }
     });
 
     return () => {
@@ -234,60 +243,65 @@ const LoginPage = () => {
 
   const handleLogin = async () => {
     if (!userId || !password) {
-        Alert.alert('Error', 'Please enter both User ID and Password.');
-        return;
+      Alert.alert('Error', 'Please enter both User ID and Password.');
+      return;
     }
 
     setLoading(true);
 
     try {
-        // Get and store push token
-        const pushToken = await registerForPushNotificationsAsync();
-        if (pushToken) await SecureStore.setItemAsync('pushToken', pushToken);
+      // Get and store push token
+      const pushToken = await registerForPushNotificationsAsync();
+      
+      // API call to login endpoint
+      const response = await fetch('https://neevschool.sbs/school/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          userId, 
+          password
+          // pushToken: pushToken || null // Include push token if available
+        }),
+      });
 
-        // API call to login endpoint
-        const response = await fetch('https://neevschool.sbs/school/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, password }),
-        });
+      // Handle non-JSON response safely
+      const data = await response.json().catch(() => ({}));
 
-        // Handle non-JSON response safely
-        const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.message || 'Login failed. Please try again.');
+      }
 
-        if (!response.ok) {
-            throw new Error(data.message || 'Login failed. Please try again.');
-        }
+      // Store tokens and user data securely
+      const storagePromises = [
+        SecureStore.setItemAsync('userToken', data.token),
+        SecureStore.setItemAsync('userData', JSON.stringify(data.userInfo)),
+        SecureStore.setItemAsync('userPermission', JSON.stringify(data.permission))
+      ];
 
-        // Store tokens and user data securely
-        const storagePromises = [
-            SecureStore.setItemAsync('userToken', data.token),
-            SecureStore.setItemAsync('userData', JSON.stringify(data.userInfo)),
-            SecureStore.setItemAsync('userPermission', JSON.stringify(data.permission))
-        ];
+      if (pushToken) {
+        storagePromises.push(SecureStore.setItemAsync('pushToken', pushToken));
+      }
 
-        if (pushToken) storagePromises.push(SecureStore.setItemAsync('pushToken', pushToken));
+      await Promise.all(storagePromises);
 
-        await Promise.all(storagePromises);
+      // Role-specific storage logic
+      if (data.userInfo?.role === 2) {
+        await SecureStore.setItemAsync('teacherClasses', JSON.stringify(data.teacherClasses));
+      } else if ([1, 2].includes(data.userInfo?.role)) {
+        await SecureStore.setItemAsync('schoolClasses', JSON.stringify(data.classes));
+      }
 
-        // Role-specific storage logic
-        if (data.userInfo?.role === 2) {
-            await SecureStore.setItemAsync('teacherClasses', JSON.stringify(data.teacherClasses));
-        } else if ([1, 2].includes(data.userInfo?.role)) {
-            await SecureStore.setItemAsync('schoolClasses', JSON.stringify(data.classes));
-        }
+      // Send test notification
+      await sendTestNotification();
 
-        // Send test notification
-        await sendTestNotification();
-
-        router.replace('../(tab)');
+      router.replace('../(tab)');
     } catch (error) {
-        console.error('Login Error:', error);
-        Alert.alert('Error', error.message || 'Something went wrong! Please try again later.');
+      console.error('Login Error:', error);
+      Alert.alert('Error', error.message || 'Something went wrong! Please try again later.');
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
-};
+  };
 
   const handlePasswordVisibility = () => {
     setShowPassword(!showPassword);

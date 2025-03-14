@@ -9,7 +9,9 @@ import {
 	Dimensions,
 	RefreshControl,
 	ActivityIndicator,
-	Image
+	Image,
+	TextInput,
+	Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -62,6 +64,8 @@ interface WeeklyTrend {
 	attendance: number;
 }
 
+const STUDENTS_PER_PAGE = 10;
+
 const AttendanceAnalytics: React.FC = () => {
 	const router = useRouter();
 	const [classes, setClasses] = useState<ClassData[]>([]);
@@ -73,9 +77,24 @@ const AttendanceAnalytics: React.FC = () => {
 	const [error, setError] = useState<string>('');
 	const [weeklyTrends, setWeeklyTrends] = useState<WeeklyTrend[]>([]);
 	const [students, setStudents] = useState<Student[]>([]);
+	const [displayedStudents, setDisplayedStudents] = useState<Student[]>([]);
+	const [currentPage, setCurrentPage] = useState(1);
+	const [searchQuery, setSearchQuery] = useState('');
+	const [submittedAttendance, setSubmittedAttendance] = useState<{[key: string]: 'PRESENT' | 'ABSENT' | 'LATE'}>({});
+	const [isEditing, setIsEditing] = useState(false);
 
 	const { width } = Dimensions.get('window');
 	const isTablet = width >= 768;
+
+	// Update displayed students based on pagination and search
+	const updateDisplayedStudents = useCallback((students: Student[], page: number, query: string) => {
+		const filteredStudents = students.filter(student => 
+			student.name.toLowerCase().includes(query.toLowerCase())
+		);
+		const startIndex = (page - 1) * STUDENTS_PER_PAGE;
+		const endIndex = startIndex + STUDENTS_PER_PAGE;
+		setDisplayedStudents(filteredStudents.slice(startIndex, endIndex));
+	}, []);
 
 	// Fetch attendance data from API
 	const fetchAttendanceData = async (sectionId: string) => {
@@ -84,29 +103,115 @@ const AttendanceAnalytics: React.FC = () => {
 			const endDate = '2025-01-26';
 			setLoading(true);
 
-			const response = await fetch(
+			// Fetch students
+			const studentsResponse = await fetch(
 				`https://neevschool.sbs/school/getAttendaceBySectionId?sectionId=${sectionId}&startDate=${startDate}&endDate=${endDate}`
 			);
 
-			if (!response.ok) {
-				throw new Error('Failed to fetch attendance data');
+			if (!studentsResponse.ok) {
+				throw new Error('Failed to fetch students data');
 			}
 
-			const data = await response.json();
-			if(data.success){
-				setStudents(data.response);
-				setLoading(false);
-				return data.response;
+			const studentsData = await studentsResponse.json();
+			if (studentsData.success) {
+				setStudents(studentsData.response);
+				updateDisplayedStudents(studentsData.response, 1, searchQuery);
+			} else {
+				setStudents([]);
+				setDisplayedStudents([]);
 			}
-			setStudents([])
-			return [];
-			
+
+			// Fetch today's attendance if it exists
+			const today = new Date().toISOString().split('T')[0];
+			const attendanceResponse = await fetch(
+				`https://neevschool.sbs/school/getAttendanceByDate?sectionId=${sectionId}&date=${today}`
+			);
+
+			if (attendanceResponse.ok) {
+				const attendanceData = await attendanceResponse.json();
+				if (attendanceData.success) {
+					setSubmittedAttendance(attendanceData.response);
+					setIsEditing(true);
+				}
+			}
+
+			setLoading(false);
 		} catch (error) {
 			setLoading(false);
 			console.error('Error fetching attendance:', error);
 			setError('Failed to fetch attendance data. Please try again.');
-			return [];
 		}
+	};
+
+	// Handle attendance submission
+	const handleSubmitAttendance = async () => {
+		try {
+			setLoading(true);
+			const currentStudentIds = displayedStudents.map(s => s.id);
+			
+			// Validation checks
+			const hasEmptyAttendance = currentStudentIds.some(id => !submittedAttendance[id]);
+			if (hasEmptyAttendance) {
+				Alert.alert('Error', 'Please mark attendance for all students on this page');
+				return;
+			}
+
+			const nextPage = currentPage + 1;
+			const totalPages = Math.ceil(students.length / STUDENTS_PER_PAGE);
+			const isLastPage = nextPage > totalPages;
+
+			const formattedAttendance = Object.entries(submittedAttendance)
+				.map(([studentId, status]) => ({
+					studentId: Number(studentId),
+					status: status
+				}));
+
+			const requestBody = {
+				attendance: formattedAttendance,
+				metadata: {
+					sectionId: selectedSection?.id,
+					date: new Date().toISOString().split('T')[0],
+					isAttendanceSubmitted: isLastPage
+				}
+			};
+
+			const response = await fetch('https://neevschool.sbs/school/submitAttendance', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify(requestBody)
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to submit attendance');
+			}
+
+			if (!isLastPage) {
+				setCurrentPage(nextPage);
+				updateDisplayedStudents(students, nextPage, searchQuery);
+				setSubmittedAttendance({});
+				Alert.alert('Success', 'Attendance submitted successfully! Moving to next page...');
+			} else {
+				Alert.alert('Success', 'All attendance submitted successfully!');
+				setCurrentPage(1);
+				setSubmittedAttendance({});
+				setIsEditing(false);
+				router.back();
+			}
+		} catch (err) {
+			Alert.alert('Error', 'Failed to submit attendance');
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	// Handle attendance status change
+	const handleAttendanceChange = (studentId: number, status: 'PRESENT' | 'ABSENT' | 'LATE') => {
+		setSubmittedAttendance(prev => ({
+			...prev,
+			[studentId]: status
+		}));
 	};
 
 	// Generate weekly trends
@@ -271,9 +376,11 @@ const AttendanceAnalytics: React.FC = () => {
 		</View>
 	);
 
+	// Render student card with attendance controls
 	const renderStudentCard = (student: Student) => {
 		const stats = calculateAttendanceStats(student.attendance);
 		const attendanceColor = parseFloat(stats.presentPercentage) >= 75 ? '#4CAF50' : '#F44336';
+		const currentStatus = submittedAttendance[student.id];
 
 		return (
 			<View style={styles.studentCard}>
@@ -292,41 +399,48 @@ const AttendanceAnalytics: React.FC = () => {
 						{student.rollNumber}
 					</Text>
 
-					<View style={styles.statsRow}>
-						<View style={styles.statItem}>
-							<Text style={[styles.statCount, { color: '#4CAF50' }]}>
-								{stats.presentDays}
-							</Text>
-							<Text style={styles.statLabel}>P</Text>
-						</View>
+					<View style={styles.attendanceControls}>
+						<TouchableOpacity
+							style={[
+								styles.attendanceButton,
+								currentStatus === 'PRESENT' && styles.attendanceButtonActive,
+								{ backgroundColor: currentStatus === 'PRESENT' ? '#4CAF50' : '#fff' }
+							]}
+							onPress={() => handleAttendanceChange(student.id, 'PRESENT')}
+						>
+							<Text style={[
+								styles.attendanceButtonText,
+								currentStatus === 'PRESENT' && styles.attendanceButtonTextActive
+							]}>Present</Text>
+						</TouchableOpacity>
 
-						<View style={styles.statItem}>
-							<Text style={[styles.statCount, { color: '#F44336' }]}>
-								{stats.absentDays}
-							</Text>
-							<Text style={styles.statLabel}>A</Text>
-						</View>
+						<TouchableOpacity
+							style={[
+								styles.attendanceButton,
+								currentStatus === 'ABSENT' && styles.attendanceButtonActive,
+								{ backgroundColor: currentStatus === 'ABSENT' ? '#F44336' : '#fff' }
+							]}
+							onPress={() => handleAttendanceChange(student.id, 'ABSENT')}
+						>
+							<Text style={[
+								styles.attendanceButtonText,
+								currentStatus === 'ABSENT' && styles.attendanceButtonTextActive
+							]}>Absent</Text>
+						</TouchableOpacity>
 
-						<View style={styles.statItem}>
-							<Text style={[styles.statCount, { color: '#FF9800' }]}>
-								{stats.lateDays}
-							</Text>
-							<Text style={styles.statLabel}>L</Text>
-						</View>
-					</View>
-
-					<View style={styles.percentageContainer}>
-						<View style={styles.percentageBar}>
-							<View
-								style={[
-									styles.percentageFill,
-									
-								]}
-							/>
-						</View>
-						<Text style={[styles.percentageText, { color: attendanceColor }]}>
-							{stats.presentPercentage}%
-						</Text>
+						<TouchableOpacity
+							style={[
+								styles.attendanceButton,
+								currentStatus === 'LATE' && styles.attendanceButtonActive,
+								{ backgroundColor: currentStatus === 'LATE' ? '#FF9800' : '#fff' }
+							]}
+							onPress={() => handleAttendanceChange(student.id, 'LATE')}
+						>
+							<Text style={[
+								styles.attendanceButtonText,
+								currentStatus === 'LATE' && styles.attendanceButtonTextActive
+							]}>Late</Text>
+						</TouchableOpacity>
 					</View>
 				</View>
 			</View>
@@ -449,6 +563,20 @@ const AttendanceAnalytics: React.FC = () => {
 					</TouchableOpacity>
 				</View>
 
+				{selectedClass && selectedSection && (
+					<View style={styles.searchContainer}>
+						<TextInput
+							style={styles.searchInput}
+							placeholder="Search students..."
+							value={searchQuery}
+							onChangeText={(text) => {
+								setSearchQuery(text);
+								updateDisplayedStudents(students, 1, text);
+							}}
+						/>
+					</View>
+				)}
+
 				{loading ? (
 					<View style={styles.loadingContainer}>
 						<ActivityIndicator size="large" color="#2196F3" />
@@ -483,12 +611,59 @@ const AttendanceAnalytics: React.FC = () => {
 						<View style={styles.studentGridContainer}>
 							<Text style={styles.sectionSubtitle}>Student Details</Text>
 							<View style={styles.grid}>
-								{students.map(student => (
+								{displayedStudents.map(student => (
 									<View key={student.id} style={styles.gridItem}>
 										{renderStudentCard(student)}
 									</View>
 								))}
 							</View>
+
+							{students.length > 0 && (
+								<View style={styles.paginationContainer}>
+									<Text style={styles.paginationText}>
+										Page {currentPage} of {Math.ceil(students.length / STUDENTS_PER_PAGE)}
+									</Text>
+									<View style={styles.paginationButtons}>
+										<TouchableOpacity
+											style={[styles.paginationButton, currentPage === 1 && styles.paginationButtonDisabled]}
+											onPress={() => {
+												if (currentPage > 1) {
+													setCurrentPage(prev => prev - 1);
+													updateDisplayedStudents(students, currentPage - 1, searchQuery);
+												}
+											}}
+											disabled={currentPage === 1}
+										>
+											<Text style={styles.paginationButtonText}>Previous</Text>
+										</TouchableOpacity>
+
+										<TouchableOpacity
+											style={[styles.paginationButton, currentPage === Math.ceil(students.length / STUDENTS_PER_PAGE) && styles.paginationButtonDisabled]}
+											onPress={() => {
+												if (currentPage < Math.ceil(students.length / STUDENTS_PER_PAGE)) {
+													setCurrentPage(prev => prev + 1);
+													updateDisplayedStudents(students, currentPage + 1, searchQuery);
+												}
+											}}
+											disabled={currentPage === Math.ceil(students.length / STUDENTS_PER_PAGE)}
+										>
+											<Text style={styles.paginationButtonText}>Next</Text>
+										</TouchableOpacity>
+									</View>
+								</View>
+							)}
+
+							<TouchableOpacity
+								style={styles.submitButton}
+								onPress={handleSubmitAttendance}
+								disabled={loading}
+							>
+								<Text style={styles.submitButtonText}>
+									{currentPage === Math.ceil(students.length / STUDENTS_PER_PAGE)
+										? "Submit All Attendance"
+										: "Submit & Continue"}
+								</Text>
+							</TouchableOpacity>
 						</View>
 					</>
 				) : (
@@ -793,39 +968,83 @@ const styles = StyleSheet.create({
 		color: '#666',
 		marginBottom: 8,
 	},
-	statsRow: {
+	attendanceControls: {
 		flexDirection: 'row',
 		justifyContent: 'space-between',
-		marginBottom: 8,
-		paddingRight: 10,
+		marginTop: 8
 	},
-	statItem: {
-		alignItems: 'center',
-	},
-	statCount: {
-		fontSize: 16,
-		fontWeight: 'bold',
-	},
-	percentageContainer: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		gap: 8,
-	},
-	percentageBar: {
+	attendanceButton: {
 		flex: 1,
-		height: 4,
-		backgroundColor: '#e0e0e0',
-		borderRadius: 2,
-		overflow: 'hidden',
+		padding: 8,
+		borderRadius: 6,
+		marginHorizontal: 2,
+		borderWidth: 1,
+		borderColor: '#ddd',
+		alignItems: 'center'
 	},
-	percentageFill: {
-		height: '100%',
-		borderRadius: 2,
+	attendanceButtonActive: {
+		borderColor: 'transparent'
 	},
-	percentageText: {
+	attendanceButtonText: {
 		fontSize: 12,
-		fontWeight: 'bold',
-		width: 45,
+		color: '#666'
+	},
+	attendanceButtonTextActive: {
+		color: '#fff'
+	},
+	searchContainer: {
+		padding: 15,
+		backgroundColor: '#fff',
+		borderBottomWidth: 1,
+		borderBottomColor: '#e0e0e0'
+	},
+	searchInput: {
+		backgroundColor: '#f5f5f5',
+		padding: 12,
+		borderRadius: 8,
+		fontSize: 16
+	},
+	paginationContainer: {
+		padding: 15,
+		backgroundColor: '#fff',
+		borderTopWidth: 1,
+		borderTopColor: '#e0e0e0'
+	},
+	paginationText: {
+		textAlign: 'center',
+		marginBottom: 10,
+		color: '#666'
+	},
+	paginationButtons: {
+		flexDirection: 'row',
+		justifyContent: 'space-between'
+	},
+	paginationButton: {
+		flex: 1,
+		padding: 10,
+		backgroundColor: '#2196F3',
+		borderRadius: 8,
+		marginHorizontal: 5,
+		alignItems: 'center'
+	},
+	paginationButtonDisabled: {
+		backgroundColor: '#ccc'
+	},
+	paginationButtonText: {
+		color: '#fff',
+		fontWeight: 'bold'
+	},
+	submitButton: {
+		backgroundColor: '#2196F3',
+		padding: 15,
+		borderRadius: 8,
+		margin: 15,
+		alignItems: 'center'
+	},
+	submitButtonText: {
+		color: '#fff',
+		fontSize: 16,
+		fontWeight: 'bold'
 	}
 });
 

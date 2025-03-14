@@ -8,10 +8,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  Dimensions,
-  ViewStyle,
-  TextStyle,
-  ImageStyle,
+  Dimensions
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as SecureStore from 'expo-secure-store';
@@ -28,54 +25,22 @@ interface UserProfile {
   schoolId: number;
   profilePic?: string;
   subject?: string;
-  class?: string;
-  section?: string;
 }
 
-interface RoleInfo {
-  roleTitle: string;
-  gradientColors: string[];
-  additionalInfo?: Array<{
-    icon: keyof typeof FontAwesome.glyphMap;
-    label: string;
-    value: string;
-  }>;
-}
-
-interface StylesType {
-  container: ViewStyle;
-  loadingContainer: ViewStyle;
-  header: ViewStyle;
-  profileImageContainer: ViewStyle;
-  imageWrapper: ViewStyle;
-  profileImage: ImageStyle;
-  placeholderImage: ViewStyle;
-  editIconContainer: ViewStyle;
-  uploadingOverlay: ViewStyle;
-  name: TextStyle;
-  role: TextStyle;
-  infoSection: ViewStyle;
-  infoCard: ViewStyle;
-  infoRow: ViewStyle;
-  infoTextContainer: ViewStyle;
-  infoLabel: TextStyle;
-  infoValue: TextStyle;
-}
-
-const ProfileScreen: React.FC = () => {
+const TeacherProfile = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [uploading, setUploading] = useState<boolean>(false);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     loadProfile();
   }, []);
 
-  const loadProfile = async (): Promise<void> => {
+  const loadProfile = async () => {
     try {
       const userDataStr = await SecureStore.getItemAsync('userData');
       if (userDataStr) {
-        const userData: UserProfile = JSON.parse(userDataStr);
+        const userData = JSON.parse(userDataStr);
         setProfile(userData);
       }
     } catch (error) {
@@ -86,7 +51,7 @@ const ProfileScreen: React.FC = () => {
     }
   };
 
-  const handleImagePick = async (): Promise<void> => {
+  const handleImagePick = async () => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
@@ -113,7 +78,7 @@ const ProfileScreen: React.FC = () => {
     }
   };
 
-  const uploadImage = async (uri: string): Promise<void> => {
+  const uploadImage = async (uri: string) => {
     try {
       const formData = new FormData();
       formData.append('profilePic', {
@@ -134,6 +99,7 @@ const ProfileScreen: React.FC = () => {
       const result = await response.json();
       
       if (result.success) {
+        // Update local profile data
         setProfile(prev => prev ? {...prev, profilePic: result.profilePic} : null);
         Alert.alert('Success', 'Profile picture updated successfully');
       } else {
@@ -147,50 +113,6 @@ const ProfileScreen: React.FC = () => {
     }
   };
 
-  const getRoleSpecificInfo = (): RoleInfo => {
-    switch (profile?.role) {
-      case 1:
-        return {
-          roleTitle: 'Administrator',
-          gradientColors: ['#3498db', '#2980b9'] as const,
-        };
-      case 2:
-        return {
-          roleTitle: 'Teacher',
-          gradientColors: ['#2ecc71', '#27ae60'] as const,
-          additionalInfo: [
-            {
-              icon: 'book',
-              label: 'Subject',
-              value: profile.subject || 'Not assigned'
-            }
-          ]
-        };
-      case 3:
-        return {
-          roleTitle: 'Student',
-          gradientColors: ['#e74c3c', '#c0392b'] as const,
-          additionalInfo: [
-            {
-              icon: 'graduation-cap',
-              label: 'Class',
-              value: profile.class || 'Not assigned'
-            },
-            {
-              icon: 'users',
-              label: 'Section',
-              value: profile.section || 'Not assigned'
-            }
-          ]
-        };
-      default:
-        return {
-          roleTitle: 'User',
-          gradientColors: ['#95a5a6', '#7f8c8d'] as const,
-        };
-    }
-  };
-
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -199,12 +121,10 @@ const ProfileScreen: React.FC = () => {
     );
   }
 
-  const roleInfo = getRoleSpecificInfo();
-
   return (
     <ScrollView style={styles.container}>
       <LinearGradient
-        colors={roleInfo.gradientColors as [string, string, ...string[]]}
+        colors={['#3498db', '#2980b9']}
         style={styles.header}
       >
         <View style={styles.profileImageContainer}>
@@ -230,12 +150,11 @@ const ProfileScreen: React.FC = () => {
           )}
         </View>
         <Text style={styles.name}>{profile?.name}</Text>
-        <Text style={styles.role}>{roleInfo.roleTitle}</Text>
+        <Text style={styles.role}>Teacher</Text>
       </LinearGradient>
 
       <View style={styles.infoSection}>
         <View style={styles.infoCard}>
-          {/* Common Info */}
           <View style={styles.infoRow}>
             <FontAwesome name="envelope" size={20} color="#3498db" />
             <View style={styles.infoTextContainer}>
@@ -260,23 +179,20 @@ const ProfileScreen: React.FC = () => {
             </View>
           </View>
 
-          {/* Role-specific Info */}
-          {roleInfo.additionalInfo?.map((info, index) => (
-            <View key={index} style={styles.infoRow}>
-              <FontAwesome name={info.icon} size={20} color="#3498db" />
-              <View style={styles.infoTextContainer}>
-                <Text style={styles.infoLabel}>{info.label}</Text>
-                <Text style={styles.infoValue}>{info.value}</Text>
-              </View>
+          <View style={styles.infoRow}>
+            <FontAwesome name="book" size={20} color="#3498db" />
+            <View style={styles.infoTextContainer}>
+              <Text style={styles.infoLabel}>Subject</Text>
+              <Text style={styles.infoValue}>{profile?.subject || 'Not assigned'}</Text>
             </View>
-          ))}
+          </View>
         </View>
       </View>
     </ScrollView>
   );
 };
 
-const styles = StyleSheet.create<StylesType>({
+const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f6fa',
@@ -382,4 +298,4 @@ const styles = StyleSheet.create<StylesType>({
   },
 });
 
-export default ProfileScreen;
+export default TeacherProfile; 

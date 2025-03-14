@@ -85,7 +85,6 @@ const RegisterTeacher: React.FC = () => {
     let res = await launchImageLibrary({ mediaType: 'photo', includeBase64: false })
 
     // launchImageLibrary({ mediaType: 'photo', includeBase64: false }, (response) => {
-    //   console.log("Response from launchImageLibrary:", response);
     // });
   };
   

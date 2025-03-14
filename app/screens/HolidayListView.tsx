@@ -1,17 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { 
   View, 
   Text, 
-  FlatList, 
+  ScrollView,
   StyleSheet, 
   Animated, 
   ActivityIndicator,
   RefreshControl,
   useWindowDimensions,
   Platform,
-  Image,
-  TouchableOpacity,
-  ScrollView
+  InteractionManager,
+  ViewStyle,
+  TextStyle,
+  Pressable,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { Surface, Chip } from 'react-native-paper';
@@ -26,7 +27,47 @@ interface Holiday {
   endDate: string;
 }
 
+interface StylesType {
+  container: ViewStyle;
+  loadingContainer: ViewStyle;
+  filterContainer: ViewStyle;
+  holidayCard: ViewStyle;
+  cardSurface: ViewStyle;
+  gradientBanner: ViewStyle;
+  bannerContent: ViewStyle;
+  durationText: TextStyle;
+  statusBadge: ViewStyle;
+  statusText: TextStyle;
+  cardContent: ViewStyle;
+  cardHeader: ViewStyle;
+  titleContainer: ViewStyle;
+  holidayTitle: TextStyle;
+  dateSection: ViewStyle;
+  dateContainer: ViewStyle;
+  dateTextContainer: ViewStyle;
+  dateLabel: TextStyle;
+  dateText: TextStyle;
+  descriptionContainer: ViewStyle;
+  description: TextStyle;
+  filterChip: ViewStyle;
+  header: TextStyle;
+  subHeader: TextStyle;
+  listContainer: ViewStyle;
+  loadingText: TextStyle;
+  emptyContainer: ViewStyle;
+  emptyText: TextStyle;
+  headerGradient: ViewStyle;
+  iconContainer: ViewStyle;
+}
+
 type FilterType = 'all' | 'upcoming' | 'ongoing' | 'past';
+
+interface HolidayItemProps {
+  item: Holiday;
+  width: number;
+  formatDate: (date: string) => string;
+  getHolidayStatus: (startDate: string, endDate: string) => { label: string; color: string };
+}
 
 const HolidayListView: React.FC = () => {
   const { width } = useWindowDimensions();
@@ -34,20 +75,63 @@ const HolidayListView: React.FC = () => {
   const [filteredHolidays, setFilteredHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
-  const [fadeAnim] = useState(new Animated.Value(0));
-  const [slideAnim] = useState(new Animated.Value(0));
+  const [fadeAnim] = useState<Animated.Value>(new Animated.Value(0));
+  const [slideAnim] = useState<Animated.Value>(new Animated.Value(0));
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const animationsReady = useRef<boolean>(false);
+  const isMounted = useRef<boolean>(true);
 
-  const formatDate = (dateString: string): string => {
+  const formatDate = useCallback((dateString: string): string => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-GB', {
       day: '2-digit',
       month: 'short',
       year: 'numeric'
     });
-  };
+  }, []);
 
-  const fetchHolidays = async () => {
+  const getHolidayStatus = useCallback((startDate: string, endDate: string): { label: string; color: string } => {
+    const today = new Date();
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (start <= today && end >= today) {
+      return { label: 'Ongoing', color: '#4CAF50' };
+    } else if (start > today) {
+      return { label: 'Upcoming', color: '#2196F3' };
+    } else {
+      return { label: 'Past', color: '#9E9E9E' };
+    }
+  }, []);
+
+  useEffect(() => {
+    isMounted.current = true;
+    
+    InteractionManager.runAfterInteractions(() => {
+      if (isMounted.current) {
+        animationsReady.current = true;
+        fetchHolidays();
+      }
+    });
+    
+    return () => {
+      isMounted.current = false;
+      animationsReady.current = false;
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 0,
+        useNativeDriver: true
+      }).stop();
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true
+      }).stop();
+    };
+  }, []);
+
+  const fetchHolidays = useCallback(async () => {
+    if (!isMounted.current) return;
+    
     try {
       setLoading(true);
       const userDataStr = await SecureStore.getItemAsync('userData');
@@ -59,7 +143,7 @@ const HolidayListView: React.FC = () => {
       );
       const result = await response.json();
 
-      if (result.success) {
+      if (result.success && isMounted.current) {
         const formattedHolidays = result.data.map((holiday: Holiday) => ({
           ...holiday,
           startDate: holiday.startDate.split('T')[0],
@@ -67,35 +151,42 @@ const HolidayListView: React.FC = () => {
         }));
         setHolidays(formattedHolidays);
         setFilteredHolidays(formattedHolidays);
-        animateEntrance();
+        
+        if (isMounted.current && animationsReady.current) {
+          animateEntrance();
+        }
       } else {
         console.error('Failed to fetch holidays:', result.message);
       }
     } catch (error) {
       console.error('Error fetching holidays:', error);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isMounted.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  };
+  }, []);
 
   const animateEntrance = () => {
+    fadeAnim.setValue(0);
+    slideAnim.setValue(0);
+    
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 500,
+        duration: 300,
         useNativeDriver: true
       }),
-      Animated.spring(slideAnim, {
+      Animated.timing(slideAnim, {
         toValue: 1,
-        tension: 20,
-        friction: 7,
+        duration: 300,
         useNativeDriver: true
       })
     ]).start();
   };
 
-  const filterHolidays = (filter: FilterType) => {
+  const filterHolidays = useCallback((filter: FilterType) => {
     setActiveFilter(filter);
     const today = new Date();
     
@@ -116,64 +207,50 @@ const HolidayListView: React.FC = () => {
       default:
         setFilteredHolidays(holidays);
     }
-  };
-
-  const getHolidayStatus = (startDate: string, endDate: string) => {
-    const today = new Date();
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-
-    if (start <= today && end >= today) {
-      return { label: 'Ongoing', color: '#4CAF50' };
-    } else if (start > today) {
-      return { label: 'Upcoming', color: '#2196F3' };
-    } else {
-      return { label: 'Past', color: '#9E9E9E' };
-    }
-  };
-
-  useEffect(() => {
-    fetchHolidays();
-  }, []);
-
-  useEffect(() => {
-    filterHolidays(activeFilter);
   }, [holidays]);
 
-  const renderFilterChips = () => (
-    <View style={styles.filterContainer}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <Chip 
-          selected={activeFilter === 'all'}
-          onPress={() => filterHolidays('all')}
-          style={styles.filterChip}
-        >
-          All
-        </Chip>
-        <Chip 
-          selected={activeFilter === 'upcoming'}
-          onPress={() => filterHolidays('upcoming')}
-          style={styles.filterChip}
-        >
-          Upcoming
-        </Chip>
-        <Chip 
-          selected={activeFilter === 'ongoing'}
-          onPress={() => filterHolidays('ongoing')}
-          style={styles.filterChip}
-        >
-          Ongoing
-        </Chip>
-        <Chip 
-          selected={activeFilter === 'past'}
-          onPress={() => filterHolidays('past')}
-          style={styles.filterChip}
-        >
-          Past
-        </Chip>
-      </ScrollView>
-    </View>
-  );
+  useEffect(() => {
+    if (holidays.length > 0) {
+      filterHolidays(activeFilter);
+    }
+  }, [holidays, activeFilter, filterHolidays]);
+
+  const renderFilterChips = useCallback(() => {
+    return (
+      <View style={styles.filterContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <Chip
+            selected={activeFilter === 'all'}
+            onPress={() => filterHolidays('all')}
+            style={styles.filterChip}
+          >
+            All
+          </Chip>
+          <Chip
+            selected={activeFilter === 'upcoming'}
+            onPress={() => filterHolidays('upcoming')}
+            style={styles.filterChip}
+          >
+            Upcoming
+          </Chip>
+          <Chip
+            selected={activeFilter === 'ongoing'}
+            onPress={() => filterHolidays('ongoing')}
+            style={styles.filterChip}
+          >
+            Ongoing
+          </Chip>
+          <Chip
+            selected={activeFilter === 'past'}
+            onPress={() => filterHolidays('past')}
+            style={styles.filterChip}
+          >
+            Past
+          </Chip>
+        </ScrollView>
+      </View>
+    );
+  }, [activeFilter, filterHolidays]);
 
   const renderHolidayItem = ({ item, index }: { item: Holiday; index: number }) => {
     const startDate = new Date(item.startDate);
@@ -182,19 +259,10 @@ const HolidayListView: React.FC = () => {
     const status = getHolidayStatus(item.startDate, item.endDate);
 
     return (
-      <Animated.View 
+      <View 
         style={[
           styles.holidayCard,
           {
-            opacity: fadeAnim,
-            transform: [
-              {
-                translateY: slideAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [50 * (index + 1), 0]
-                })
-              }
-            ],
             width: width - 32
           }
         ]}
@@ -217,13 +285,17 @@ const HolidayListView: React.FC = () => {
           <View style={styles.cardContent}>
             <View style={styles.cardHeader}>
               <View style={styles.titleContainer}>
-                <FontAwesome name="star" size={20} color="#ffd700" style={styles.titleIcon} />
+                <View style={styles.iconContainer}>
+                  <FontAwesome name="star" size={20} color="#ffd700" />
+                </View>
                 <Text style={styles.holidayTitle}>{item.title}</Text>
               </View>
               
               <View style={styles.dateSection}>
                 <View style={styles.dateContainer}>
-                  <FontAwesome name="calendar-o" size={16} color="#666" />
+                  <View style={styles.iconContainer}>
+                    <FontAwesome name="calendar-o" size={16} color="#666" />
+                  </View>
                   <View style={styles.dateTextContainer}>
                     <Text style={styles.dateLabel}>From</Text>
                     <Text style={styles.dateText}>{formatDate(item.startDate)}</Text>
@@ -231,7 +303,9 @@ const HolidayListView: React.FC = () => {
                 </View>
                 
                 <View style={styles.dateContainer}>
-                  <FontAwesome name="calendar" size={16} color="#666" />
+                  <View style={styles.iconContainer}>
+                    <FontAwesome name="calendar" size={16} color="#666" />
+                  </View>
                   <View style={styles.dateTextContainer}>
                     <Text style={styles.dateLabel}>To</Text>
                     <Text style={styles.dateText}>{formatDate(item.endDate)}</Text>
@@ -241,12 +315,14 @@ const HolidayListView: React.FC = () => {
             </View>
 
             <View style={styles.descriptionContainer}>
-              <FontAwesome name="info-circle" size={16} color="#666" style={styles.descriptionIcon} />
+              <View style={styles.iconContainer}>
+                <FontAwesome name="info-circle" size={16} color="#666" />
+              </View>
               <Text style={styles.description}>{item.description}</Text>
             </View>
           </View>
         </Surface>
-      </Animated.View>
+      </View>
     );
   };
 
@@ -271,22 +347,9 @@ const HolidayListView: React.FC = () => {
 
       {renderFilterChips()}
 
-      <FlatList
-        data={filteredHolidays}
-        renderItem={renderHolidayItem}
-        keyExtractor={item => item.id}
+      <ScrollView
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <FontAwesome name="calendar-times-o" size={50} color="#95a5a6" />
-            <Text style={styles.emptyText}>
-              {activeFilter === 'all' 
-                ? 'No holidays scheduled' 
-                : `No ${activeFilter} holidays found`}
-            </Text>
-          </View>
-        }
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -297,33 +360,57 @@ const HolidayListView: React.FC = () => {
             colors={['#4facfe']}
           />
         }
-      />
+      >
+        {filteredHolidays.length > 0 ? (
+          filteredHolidays.map(item => (
+            <HolidayItem 
+              key={item.id} 
+              item={item} 
+              width={width} 
+              formatDate={formatDate}
+              getHolidayStatus={getHolidayStatus}
+            />
+          ))
+        ) : (
+          <View style={styles.emptyContainer}>
+            <FontAwesome name="calendar-times-o" size={50} color="#95a5a6" />
+            <Text style={styles.emptyText}>
+              {activeFilter === 'all' 
+                ? 'No holidays scheduled' 
+                : `No ${activeFilter} holidays found`}
+            </Text>
+          </View>
+        )}
+      </ScrollView>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<StylesType>({
   container: {
     flex: 1,
-    backgroundColor: '#f5f6fa',
+    backgroundColor: '#F0F2F5',
   },
   headerGradient: {
     padding: 20,
     paddingTop: Platform.OS === 'ios' ? 60 : 20,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
   },
   header: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '800',
     color: '#fff',
     textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.1)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   subHeader: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.9)',
     textAlign: 'center',
-    marginTop: 5,
+    marginTop: 8,
   },
   listContainer: {
     padding: 16,
@@ -331,48 +418,49 @@ const styles = StyleSheet.create({
   },
   holidayCard: {
     marginBottom: 16,
+    marginHorizontal: 16,
+    borderRadius: 16,
   },
   cardSurface: {
-    borderRadius: 12,
+    borderRadius: 16,
     backgroundColor: 'white',
     elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowRadius: 12,
     overflow: 'hidden',
   },
   gradientBanner: {
-    padding: 8,
-    alignItems: 'center',
+    padding: 12,
   },
   durationText: {
     color: 'white',
-    fontWeight: '600',
-    fontSize: 14,
+    fontWeight: '700',
+    fontSize: 16,
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   cardContent: {
     padding: 16,
   },
   cardHeader: {
-    gap: 12,
+    gap: 16,
   },
   titleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
-  titleIcon: {
-    marginRight: 4,
+    gap: 12,
   },
   holidayTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
-    color: '#2c3e50',
+    color: '#1A1A1A',
     flex: 1,
   },
   dateSection: {
-    gap: 8,
+    gap: 12,
   },
   dateContainer: {
     flexDirection: 'row',
@@ -383,31 +471,28 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dateLabel: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#666',
     marginBottom: 2,
+    fontWeight: '500',
   },
   dateText: {
-    fontSize: 14,
-    color: '#2c3e50',
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
   },
   descriptionContainer: {
     flexDirection: 'row',
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#eee',
-    gap: 8,
-  },
-  descriptionIcon: {
-    marginTop: 2,
+    borderTopColor: 'rgba(0,0,0,0.08)',
+    gap: 12,
   },
   description: {
     flex: 1,
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
+    fontSize: 15,
+    color: '#4A4A4A',
+    lineHeight: 22,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -435,28 +520,142 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   filterChip: {
     marginRight: 8,
+    borderRadius: 20,
   },
   bannerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    width: '100%',
-    paddingHorizontal: 8,
   },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
   statusText: {
     color: 'white',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
+  },
+  iconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
-export default HolidayListView; 
+const HolidayItem: React.FC<HolidayItemProps> = memo(({ item, width, formatDate, getHolidayStatus }) => {
+  const [scaleAnim] = useState(new Animated.Value(1));
+  const status = getHolidayStatus(item.startDate, item.endDate);
+  const durationDays = Math.ceil(
+    (new Date(item.endDate).getTime() - new Date(item.startDate).getTime()) / (1000 * 3600 * 24)
+  );
+
+  const onPressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.97,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const onPressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  return (
+    <Animated.View 
+      style={[
+        styles.holidayCard,
+        { transform: [{ scale: scaleAnim }] }
+      ]}
+    >
+      <Surface style={styles.cardSurface}>
+        <LinearGradient
+          colors={[status.color, adjustColor(status.color, -20)]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradientBanner}
+        >
+          <View style={styles.bannerContent}>
+            <Text style={styles.durationText}>
+              {durationDays} {durationDays === 1 ? 'Day' : 'Days'}
+            </Text>
+            <View style={[styles.statusBadge, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+              <Text style={styles.statusText}>{status.label}</Text>
+            </View>
+          </View>
+        </LinearGradient>
+
+        <Pressable 
+          style={styles.cardContent}
+          onPressIn={onPressIn}
+          onPressOut={onPressOut}
+          android_ripple={{ color: 'rgba(0,0,0,0.1)' }}
+        >
+          <View style={styles.cardHeader}>
+            <View style={styles.titleContainer}>
+              <View style={styles.iconContainer}>
+                <FontAwesome name="star" size={20} color={status.color} />
+              </View>
+              <Text style={styles.holidayTitle}>{item.title}</Text>
+            </View>
+            
+            <View style={styles.dateSection}>
+              <View style={styles.dateContainer}>
+                <View style={styles.iconContainer}>
+                  <FontAwesome name="calendar-o" size={16} color={status.color} />
+                </View>
+                <View style={styles.dateTextContainer}>
+                  <Text style={styles.dateLabel}>From</Text>
+                  <Text style={[styles.dateText, { color: status.color }]}>{formatDate(item.startDate)}</Text>
+                </View>
+              </View>
+              
+              <View style={styles.dateContainer}>
+                <View style={styles.iconContainer}>
+                  <FontAwesome name="calendar" size={16} color={status.color} />
+                </View>
+                <View style={styles.dateTextContainer}>
+                  <Text style={styles.dateLabel}>To</Text>
+                  <Text style={[styles.dateText, { color: status.color }]}>{formatDate(item.endDate)}</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.descriptionContainer}>
+            <View style={styles.iconContainer}>
+              <FontAwesome name="info-circle" size={16} color={status.color} />
+            </View>
+            <Text style={styles.description}>{item.description}</Text>
+          </View>
+        </Pressable>
+      </Surface>
+    </Animated.View>
+  );
+});
+
+const adjustColor = (color: string, amount: number): string => {
+  const hex = color.replace('#', '');
+  const r = Math.max(0, Math.min(255, parseInt(hex.substring(0, 2), 16) + amount));
+  const g = Math.max(0, Math.min(255, parseInt(hex.substring(2, 4), 16) + amount));
+  const b = Math.max(0, Math.min(255, parseInt(hex.substring(4, 6), 16) + amount));
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+};
+
+export default memo(HolidayListView); 

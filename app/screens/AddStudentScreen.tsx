@@ -73,7 +73,6 @@ const AddStudentScreen = () => {
         admissionDate: formatDateForAPI(formData.admissionDate),
         gender: formData.gender === 'male' ? 1 : formData.gender === 'female' ? 2 : 3,
       };
-
       const response = await fetch('https://neevschool.sbs/school/addStudent', {
         method: 'POST',
         headers: {
@@ -81,39 +80,41 @@ const AddStudentScreen = () => {
         },
         body: JSON.stringify(apiData),
       });
-      setLoading(false)
-      if (!response.ok) {
-        throw new Error('Failed to add student');
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        Alert.alert(
+          '✅ Success', 
+          'Student added successfully',
+          [
+            {
+              text: '✅ Success',
+              onPress: () => {
+                setFormData({
+                  firstName: '',
+                  lastName: '',
+                  schoolId: 1,
+                  dateOfBirth: new Date(),
+                  gender: '',
+                  sectionsId: Number(sectionId),
+                  admissionDate: new Date(),
+                  parentName: '',
+                  parentContact: '',
+                  address: '',
+                  email: '',
+                  aadhaarNumber: '',
+                });
+              },
+              style: 'default'
+            }
+          ]
+        );
+      } else {
+        throw new Error(data.message || 'Failed to add student');
       }
-      Alert.alert(
-        '✅ Success', 
-        'Student added successfully',
-        [
-          {
-            text: '✅ Success',
-            onPress: () => {
-              setFormData({
-                firstName: '',
-                lastName: '',
-                schoolId: 1,
-                dateOfBirth: new Date(),
-                gender: '',
-                sectionsId: Number(sectionId),
-                admissionDate: new Date(),
-                parentName: '',
-                parentContact: '',
-                address: '',
-                email: '',
-                aadhaarNumber: '',
-              });
-            },
-            style: 'default'
-          }
-        ]
-      );
     } catch (error) {
       setLoading(false)
-      Alert.alert('Error', 'Failed to save student');
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to register student');
     }
   };
 

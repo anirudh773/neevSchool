@@ -10,11 +10,12 @@ import {
   ActivityIndicator,
   StatusBar,
   SafeAreaView,
+  Linking,
 } from 'react-native';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
-import { Permission, UserData } from '@/constants/types';
+import { Permission, UserData } from 'constants/types';
 
 const { width } = Dimensions.get('window');
 const cardWidth = (width - 60) / 2; // 40 is total horizontal padding
@@ -65,6 +66,46 @@ const HomeScreen = () => {
     }
   };
 
+  const handleHelpPress = () => {
+    Alert.alert(
+      "Need Help?",
+      "Contact our support at: 7376623107",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Call Now",
+          onPress: () => {
+            Linking.openURL('tel:7376623107');
+          }
+        }
+      ]
+    );
+  };
+
+  const handleProfilePress = () => {
+    if (userData) {
+      switch (userData.role) {
+        case 1:
+          router.push('/screens/Admin/Profile');
+          break;
+        case 2:
+          router.push('/screens/Teacher/Profile');
+          break;
+        case 3:
+          router.push('/screens/Student/Profile');
+          break;
+        default:
+          Alert.alert('Error', 'Invalid user role');
+      }
+    } else {
+      Alert.alert('Error', 'Please login again');
+      router.replace('/screens/LoginPage');
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -83,9 +124,14 @@ const HomeScreen = () => {
             <Text style={styles.welcomeText}>Welcome back,</Text>
             <Text style={styles.userIdText}>{userData?.name || userData?.userId}</Text>
           </View>
-          <TouchableOpacity style={styles.profileButton}>
-            <FontAwesome name="user-circle" size={35} color="#007AFF" />
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            <TouchableOpacity 
+              style={styles.profileButton}
+              onPress={handleProfilePress}
+            >
+              <FontAwesome name="user-circle" size={35} color="#007AFF" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Features Grid */}
@@ -137,7 +183,7 @@ const HomeScreen = () => {
         </View>
 
         {/* Support Section */}
-        <TouchableOpacity style={styles.supportCard}>
+        <TouchableOpacity style={styles.supportCard} onPress={handleHelpPress} >
           <View style={styles.supportContent}>
             <Text style={styles.supportTitle}>Need Help?</Text>
             <Text style={styles.supportSubtitle}>Contact our support team</Text>
@@ -171,15 +217,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 16,
-    elevation: 4,
-    shadowColor: '#1A237E',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   welcomeText: {
     fontSize: Math.min(16, width * 0.04),
@@ -319,6 +363,18 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontWeight: '500',
     fontSize: Math.min(14, width * 0.035),
+  },
+  helpButton: {
+    backgroundColor: '#3498db',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 8,
+  },
+  helpButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 12,
   },
 });
 

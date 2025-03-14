@@ -1,15 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { 
   View, 
   Text, 
-  FlatList, 
+  ScrollView,
   StyleSheet, 
   TouchableOpacity, 
   Modal, 
   TextInput, 
-  ScrollView,
   Alert,
-  Animated,
   useWindowDimensions,
   Platform,
   KeyboardAvoidingView,
@@ -30,6 +28,13 @@ interface Holiday {
   holidayUrl?: string | null;
 }
 
+interface HolidayItemProps {
+  item: Holiday;
+  onEdit: (holiday: Holiday) => void;
+  onDelete: (id: string) => void;
+  formatDate: (date: Date) => string;
+}
+
 interface NewHolidayState {
   id?: string;
   title: string;
@@ -38,7 +43,37 @@ interface NewHolidayState {
   endDate: Date;
 }
 
-const HolidayList: React.FC = () => {
+// Create a memoized holiday item component
+const HolidayItem = memo(({ item, onEdit, onDelete, formatDate }: HolidayItemProps) => {
+  return (
+    <View style={styles.holidayItem}>
+      <View style={styles.holidayContent}>
+        <Text style={styles.holidayTitle}>{item.title}</Text>
+        <Text style={styles.holidayDate}>
+          {formatDate(new Date(item.startDate))} - 
+          {formatDate(new Date(item.endDate))}
+        </Text>
+        <Text style={styles.holidayDescription}>{item.description}</Text>
+      </View>
+      <View style={styles.actionButtonsContainer}>
+        <TouchableOpacity 
+          style={[styles.actionButton, styles.editButton]} 
+          onPress={() => onEdit(item)}
+        >
+          <Text style={styles.actionButtonText}>Edit</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.actionButton, styles.deleteButton]} 
+          onPress={() => onDelete(item.id)}
+        >
+          <Text style={styles.actionButtonText}>Delete</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
+
+const HolidayList = () => {
   const { width, height } = useWindowDimensions();
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [isAddModalVisible, setAddModalVisible] = useState<boolean>(false);
@@ -54,17 +89,19 @@ const HolidayList: React.FC = () => {
   });
   const [showStartDatePicker, setShowStartDatePicker] = useState<boolean>(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState<boolean>(false);
-  const [fadeAnim] = useState(new Animated.Value(0));
-  const [slideAnim] = useState(new Animated.Value(0));
+  const isMounted = useRef(true);
 
-  const formatDate = (date: Date): string => {
+  // Memoize functions
+  const formatDate = useCallback((date: Date): string => {
     const day = date.getDate().toString().padStart(2, '0');
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const year = date.getFullYear();
     return `${day}-${month}-${year}`;
-  };
+  }, []);
 
-  const fetchHolidays = async () => {
+  const fetchHolidays = useCallback(async () => {
+    if (!isMounted.current) return;
+    
     try {
       setLoading(true);
       const userDataStr = await SecureStore.getItemAsync('userData');
@@ -74,7 +111,7 @@ const HolidayList: React.FC = () => {
       const response = await fetch(`https://neevschool.sbs/school/getHolidayBySchoolId?schoolId=${userData.schoolId}`);
       const result = await response.json();
 
-      if (result.success) {
+      if (result.success && isMounted.current) {
         const formattedHolidays = result.data.map((holiday: Holiday) => ({
           ...holiday,
           startDate: holiday.startDate.split('T')[0],
@@ -84,35 +121,18 @@ const HolidayList: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching holidays', error);
-      Alert.alert('Error', 'Could not fetch holidays');
+      if (isMounted.current) {
+        Alert.alert('Error', 'Could not fetch holidays');
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isMounted.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  };
-
-  useEffect(() => {
-    fetchHolidays();
-    animateEntrance();
   }, []);
 
-  const animateEntrance = () => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true
-      }),
-      Animated.spring(slideAnim, {
-        toValue: 1,
-        tension: 20,
-        friction: 7,
-        useNativeDriver: true
-      })
-    ]).start();
-  };
-
-  const handleEditHoliday = (holiday: Holiday) => {
+  const handleEditHoliday = useCallback((holiday: Holiday): void => {
     setIsEditMode(true);
     setNewHoliday({
       id: holiday.id,
@@ -122,7 +142,53 @@ const HolidayList: React.FC = () => {
       endDate: new Date(holiday.endDate)
     });
     setAddModalVisible(true);
-  };
+  }, []);
+
+  const handleDeleteHoliday = useCallback((holidayId: string): void => {
+    Alert.alert(
+      'Confirm Deletion',
+      'Are you sure you want to delete this holiday?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setActionLoading(true);
+              const response = await fetch(`https://neevschool.sbs/school/updateHoliday/${holidayId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ isActive: false })
+              });
+
+              const result = await response.json();
+              if (result.success) {
+                Alert.alert('Success', 'Holiday deleted successfully');
+                await fetchHolidays();
+              } else {
+                throw new Error(result.message);
+              }
+            } catch (error) {
+              console.error('Error deleting holiday:', error);
+              Alert.alert('Error', 'Failed to delete holiday');
+            } finally {
+              setActionLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  }, [fetchHolidays]);
+
+  useEffect(() => {
+    isMounted.current = true;
+    fetchHolidays();
+    
+    return () => {
+      isMounted.current = false;
+    };
+  }, [fetchHolidays]);
 
   const handleSaveHoliday = async () => {
     if (!newHoliday.title || !newHoliday.description) {
@@ -130,8 +196,8 @@ const HolidayList: React.FC = () => {
       return;
     }
 
-    if (newHoliday.startDate >= newHoliday.endDate) {
-      Alert.alert('Error', 'End date must be after start date.');
+    if (newHoliday.startDate > newHoliday.endDate) {
+      Alert.alert('Error', 'End date cannot be before start date.');
       return;
     }
 
@@ -178,43 +244,6 @@ const HolidayList: React.FC = () => {
     }
   };
 
-  const handleDeleteHoliday = (holidayId: string) => {
-    Alert.alert(
-      'Confirm Deletion',
-      'Are you sure you want to delete this holiday?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setActionLoading(true);
-              const response = await fetch(`https://neevschool.sbs/school/updateHoliday/${holidayId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ isActive: false })
-              });
-
-              const result = await response.json();
-              if (result.success) {
-                Alert.alert('Success', 'Holiday deleted successfully');
-                await fetchHolidays();
-              } else {
-                throw new Error(result.message);
-              }
-            } catch (error) {
-              console.error('Error deleting holiday:', error);
-              Alert.alert('Error', 'Failed to delete holiday');
-            } finally {
-              setActionLoading(false);
-            }
-          }
-        }
-      ]
-    );
-  };
-
   const resetForm = () => {
     setNewHoliday({
       id: '',
@@ -224,54 +253,6 @@ const HolidayList: React.FC = () => {
       endDate: new Date()
     });
   };
-
-  const renderHolidayItem = ({ item, index }: { item: Holiday; index: number }) => (
-    <Animated.View 
-      style={[
-        styles.holidayItem, 
-        { 
-          opacity: fadeAnim,
-          transform: [
-            { 
-              scale: fadeAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.8, 1]
-              })
-            },
-            {
-              translateY: slideAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [50 * (index + 1), 0]
-              })
-            }
-          ]
-        }
-      ]}
-    >
-      <View style={styles.holidayContent}>
-        <Text style={styles.holidayTitle}>{item.title}</Text>
-        <Text style={styles.holidayDate}>
-          {formatDate(new Date(item.startDate))} - 
-          {formatDate(new Date(item.endDate))}
-        </Text>
-        <Text style={styles.holidayDescription}>{item.description}</Text>
-      </View>
-      <View style={styles.actionButtonsContainer}>
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.editButton]} 
-          onPress={() => handleEditHoliday(item)}
-        >
-          <Text style={styles.actionButtonText}>Edit</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.deleteButton]} 
-          onPress={() => handleDeleteHoliday(item.id)}
-        >
-          <Text style={styles.actionButtonText}>Delete</Text>
-        </TouchableOpacity>
-      </View>
-    </Animated.View>
-  );
 
   const renderModal = () => (
     <Modal
@@ -383,62 +364,63 @@ const HolidayList: React.FC = () => {
     </Modal>
   );
 
-  if (loading && !refreshing) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3498db" />
-        <Text style={styles.loadingText}>Loading holidays...</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      {actionLoading && (
-        <View style={styles.actionLoadingOverlay}>
-          <ActivityIndicator size="large" color="#fff" />
+      <Text style={styles.header}>Holiday Management</Text>
+      
+      {loading && !refreshing ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3498db" />
+          <Text style={styles.loadingText}>Loading holidays...</Text>
         </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.listContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                fetchHolidays();
+              }}
+              colors={['#3498db']}
+            />
+          }
+        >
+          {holidays.length > 0 ? (
+            holidays.map(item => (
+              <HolidayItem
+                key={item.id}
+                item={item}
+                onEdit={handleEditHoliday}
+                onDelete={handleDeleteHoliday}
+                formatDate={formatDate}
+              />
+            ))
+          ) : (
+            <Text style={styles.emptyText}>No holidays found</Text>
+          )}
+        </ScrollView>
       )}
       
-      <Text style={styles.header}>School Holidays</Text>
-      <FlatList
-        data={holidays}
-        renderItem={renderHolidayItem}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>No holidays scheduled</Text>
-        }
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              fetchHolidays();
-            }}
-            colors={['#3498db']}
-          />
-        }
-      />
-      
-      <TouchableOpacity 
-        style={styles.fab} 
+      <TouchableOpacity
+        style={styles.fab}
         onPress={() => {
           setIsEditMode(false);
-          setNewHoliday({ 
-            title: '', 
-            description: '', 
-            startDate: new Date(), 
-            endDate: new Date() 
-          });
+          resetForm();
           setAddModalVisible(true);
         }}
       >
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
-
+      
       {renderModal()}
+      
+      {actionLoading && (
+        <View style={styles.actionLoadingOverlay}>
+          <ActivityIndicator size="large" color="white" />
+        </View>
+      )}
     </View>
   );
 };
@@ -670,4 +652,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default HolidayList;
+export default memo(HolidayList);

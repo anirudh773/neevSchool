@@ -211,7 +211,6 @@ const RegisterTeacher: React.FC = () => {
         }, 2000);
       }
     } catch (error) {
-      console.error('Upload error:', error);
       setUploadStatus('error');
       Alert.alert('Error', 'Failed to upload resume. Please try again.');
     }
@@ -239,7 +238,7 @@ const RegisterTeacher: React.FC = () => {
         ...formData,
         joiningDate: formattedDate,
         schoolId: userData.schoolId // Use dynamic schoolId here
-      };
+      }; 
 
       const response = await fetch('https://neevschool.sbs/school/addTeacher', {
         method: 'POST',

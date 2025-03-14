@@ -1,8 +1,23 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Dimensions, TouchableOpacity, Modal, Linking, Alert } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
-import { BarChart, LineChart, PieChart } from 'react-native-chart-kit';
-import { Modal } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+
+// Define interfaces for component props
+interface BarProps {
+  value: number;
+  maxValue: number;
+  label: string;
+  color: string;
+}
+
+interface PieSegmentProps {
+  percentage: number;
+  color: string;
+  label: string;
+  value: number;
+}
+
 interface Schedule {
   id: number;
   subject_id: number;
@@ -45,7 +60,56 @@ interface TopScorer {
   marks: number;
 }
 
-const ExamStatsDashboard = () => {
+interface ChartData {
+  gradeDistribution: {
+    labels: string[];
+    datasets: Array<{ data: number[] }>;
+  };
+  progress: {
+    labels: string[];
+    datasets: Array<{ data: number[] }>;
+  };
+  passFail: Array<{
+    name: string;
+    population: number;
+    color: string;
+    legendFontColor: string;
+  }>;
+}
+
+interface AggregatedData {
+  passed: number;
+  failed: number;
+  grade_distribution: number[];
+  class_average: number;
+}
+
+// Create a simple bar component
+const Bar: React.FC<BarProps> = ({ value, maxValue, label, color }) => {
+  const percentage = (value / maxValue) * 100;
+  return (
+    <View style={styles.barContainer}>
+      <View style={styles.barWrapper}>
+        <View style={[styles.bar, { width: `${percentage}%`, backgroundColor: color }]} />
+      </View>
+      <Text style={styles.barLabel}>{label}</Text>
+      <Text style={styles.barValue}>{value}</Text>
+    </View>
+  );
+};
+
+// Create a simple pie segment component
+const PieSegment: React.FC<PieSegmentProps> = ({ percentage, color, label, value }) => (
+  <View style={styles.pieSegmentContainer}>
+    <View style={[styles.pieSegmentIndicator, { backgroundColor: color }]} />
+    <View style={styles.pieSegmentLabel}>
+      <Text style={styles.pieSegmentText}>{label}</Text>
+      <Text style={styles.pieSegmentValue}>{value} ({percentage}%)</Text>
+    </View>
+  </View>
+);
+
+const ExamStatsDashboard: React.FC = () => {
   const examData: ExamData = {
     id: 4,
     name: "Final Exams 2025",
@@ -117,9 +181,7 @@ const ExamStatsDashboard = () => {
   };
 
   const [selectedSubject, setSelectedSubject] = useState<number | null>(null);
-
-  // ... previous state and data remain same
-  const [showMarksModal, setShowMarksModal] = useState(false);
+  const [showMarksModal, setShowMarksModal] = useState<boolean>(false);
 
   // Dummy data for all student marks
   const dummyStudentMarks: StudentMark[] = [
@@ -135,7 +197,7 @@ const ExamStatsDashboard = () => {
     { id: 10, name: "Tom Parker", marks: 58, grade: "D+" },
   ];
 
-  const MarksModal = () => (
+  const MarksModal: React.FC = () => (
     <Modal
       visible={showMarksModal}
       animationType="slide"
@@ -172,8 +234,8 @@ const ExamStatsDashboard = () => {
   );
 
   // Data calculation functions
-  const getAggregatedData = () => {
-    return examData.schedules.reduce((acc, curr) => ({
+  const getAggregatedData = (): AggregatedData => {
+    return examData.schedules.reduce((acc: AggregatedData, curr: Schedule) => ({
       passed: acc.passed + (curr.pass_fail_data?.passed || 0),
       failed: acc.failed + (curr.pass_fail_data?.failed || 0),
       grade_distribution: curr.grade_distribution
@@ -190,11 +252,10 @@ const ExamStatsDashboard = () => {
 
   const aggregatedData = getAggregatedData();
   const averageClassAverage = (aggregatedData.class_average / examData.schedules.length).toFixed(1);
-
   const currentSubject = examData.schedules.find(s => s.id === selectedSubject);
 
   // Chart data preparation
-  const getChartData = {
+  const getChartData: ChartData = {
     gradeDistribution: {
       labels: ["90+", "80-89", "70-79", "60-69", "<60"],
       datasets: [{
@@ -227,6 +288,71 @@ const ExamStatsDashboard = () => {
         legendFontColor: "#7F7F7F",
       }
     ]
+  };
+
+  // Modify the chart rendering sections
+  const renderGradeDistribution = (): JSX.Element => {
+    const data = selectedSubject
+      ? currentSubject?.grade_distribution || [0, 0, 0, 0, 0]
+      : aggregatedData.grade_distribution;
+    
+    const maxValue = Math.max(...data);
+    const labels = ["90+", "80-89", "70-79", "60-69", "<60"];
+    const colors = ['#4CAF50', '#8BC34A', '#FFC107', '#FF9800', '#F44336'];
+
+    return (
+      <View style={styles.chartContainer}>
+        <Text style={styles.chartTitle}>
+          {selectedSubject ? 'Grade Distribution' : 'Overall Grade Distribution'}
+        </Text>
+        <View style={styles.barsContainer}>
+          {data.map((value, index) => (
+            <Bar
+              key={labels[index]}
+              value={value}
+              maxValue={maxValue}
+              label={labels[index]}
+              color={colors[index]}
+            />
+          ))}
+        </View>
+      </View>
+    );
+  };
+
+  const renderPassFailRatio = (): JSX.Element => {
+    const passed = selectedSubject
+      ? currentSubject?.pass_fail_data?.passed || 0
+      : aggregatedData.passed;
+    const failed = selectedSubject
+      ? currentSubject?.pass_fail_data?.failed || 0
+      : aggregatedData.failed;
+    
+    const total = passed + failed;
+    const passPercentage = total > 0 ? Math.round((passed / total) * 100) : 0;
+    const failPercentage = total > 0 ? Math.round((failed / total) * 100) : 0;
+
+    return (
+      <View style={styles.chartContainer}>
+        <Text style={styles.chartTitle}>
+          {selectedSubject ? 'Pass/Fail Ratio' : 'Overall Pass/Fail Ratio'}
+        </Text>
+        <View style={styles.pieContainer}>
+          <PieSegment
+            percentage={passPercentage}
+            color="#4CAF50"
+            label="Passed"
+            value={passed}
+          />
+          <PieSegment
+            percentage={failPercentage}
+            color="#F44336"
+            label="Failed"
+            value={failed}
+          />
+        </View>
+      </View>
+    );
   };
 
   return (
@@ -290,66 +416,27 @@ const ExamStatsDashboard = () => {
           )}
         </View>
 
-        {/* Grade Distribution Chart */}
-        <View style={styles.chartContainer}>
-          <Text style={styles.chartTitle}>
-            {selectedSubject ? 'Grade Distribution' : 'Overall Grade Distribution'}
-          </Text>
-          <BarChart
-            data={getChartData.gradeDistribution}
-            width={Dimensions.get('window').width - 50}
-            height={220}
-            chartConfig={{
-              backgroundColor: '#ffffff',
-              backgroundGradientFrom: '#ffffff',
-              backgroundGradientTo: '#ffffff',
-              decimalPlaces: 0,
-              color: (opacity) => `rgba(99, 102, 241, ${opacity})`,
-              barPercentage: 0.5,
-            }}
-            style={styles.chart}
-            yAxisSuffix=""
-          />
-        </View>
+        {renderGradeDistribution()}
+        {renderPassFailRatio()}
 
         {/* Progress Chart (Subject-specific only) */}
         {selectedSubject && (
           <View style={styles.chartContainer}>
             <Text style={styles.chartTitle}>Performance Trend</Text>
-            <LineChart
-              data={getChartData.progress}
-              width={Dimensions.get('window').width - 50}
-              height={220}
-              chartConfig={{
-                backgroundColor: '#ffffff',
-                backgroundGradientFrom: '#ffffff',
-                backgroundGradientTo: '#ffffff',
-                decimalPlaces: 0,
-                color: (opacity) => `rgba(16, 185, 129, ${opacity})`,
-              }}
-              bezier
-              style={styles.chart}
-            />
+            <LinearGradient
+              colors={['#4CAF50', '#8BC34A']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.progressChart}
+            >
+              {getChartData.progress.datasets[0].data.map((value, index) => (
+                <View key={index} style={styles.progressBar}>
+                  <Text style={styles.progressLabel}>{getChartData.progress.labels[index]}</Text>
+                </View>
+              ))}
+            </LinearGradient>
           </View>
         )}
-
-        {/* Pass/Fail Ratio */}
-        <View style={styles.chartContainer}>
-          <Text style={styles.chartTitle}>
-            {selectedSubject ? 'Pass/Fail Ratio' : 'Overall Pass/Fail Ratio'}
-          </Text>
-          <PieChart
-            data={getChartData.passFail}
-            width={Dimensions.get('window').width - 50}
-            height={220}
-            accessor="population"
-            chartConfig={{
-              color: (opacity) => `rgba(0, 0, 0, ${opacity})`,
-            }}
-            style={styles.chart}
-            absolute
-          />
-        </View>
 
         {/* Top Performers (Subject-specific only) */}
         {selectedSubject && (
@@ -436,9 +523,72 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     marginBottom: 12,
   },
-  chart: {
+  barsContainer: {
+    padding: 16,
+    gap: 12,
+  },
+  barContainer: {
+    marginBottom: 8,
+  },
+  barWrapper: {
+    height: 20,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  bar: {
+    height: '100%',
+    borderRadius: 10,
+  },
+  barLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  barValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  pieContainer: {
+    padding: 16,
+    gap: 16,
+  },
+  pieSegmentContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  pieSegmentIndicator: {
+    width: 16,
+    height: 16,
     borderRadius: 8,
-    justifyContent: 'space-between'
+  },
+  pieSegmentLabel: {
+    flex: 1,
+  },
+  pieSegmentText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  pieSegmentValue: {
+    fontSize: 12,
+    color: '#666',
+  },
+  progressChart: {
+    height: 20,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    flex: 1,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  progressLabel: {
+    fontSize: 12,
+    color: '#fff',
   },
   performersContainer: {
     backgroundColor: 'white',

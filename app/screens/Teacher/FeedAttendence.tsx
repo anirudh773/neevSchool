@@ -8,12 +8,14 @@ import {
   Dimensions,
   Alert,
   ActivityIndicator,
-  Platform
+  Platform,
+  TextInput
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 
 const { width } = Dimensions.get('window');
+const STUDENTS_PER_PAGE = 10;
 
 interface Student {
   id: number;
@@ -31,10 +33,23 @@ interface AttendanceData {
 const TeacherAttendanceManagement: React.FC = () => {
   const { sectionId } = useLocalSearchParams();
   const [students, setStudents] = useState<Student[]>([]);
+  const [displayedStudents, setDisplayedStudents] = useState<Student[]>([]);
   const [attendanceStatuses, setAttendanceStatuses] = useState<{[key: number]: 'PRESENT' | 'ABSENT' | 'LATE'}>({});
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [date] = useState(new Date().toDateString());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+
+  const updateDisplayedStudents = (students: Student[], page: number, query: string) => {
+    const filteredStudents = students.filter(student => 
+      `${student.firstName} ${student.lastName}`.toLowerCase().includes(query.toLowerCase())
+    );
+    const startIndex = (page - 1) * STUDENTS_PER_PAGE;
+    const endIndex = startIndex + STUDENTS_PER_PAGE;
+    setDisplayedStudents(filteredStudents.slice(startIndex, endIndex));
+  };
 
   const fetchStudentsBySection = async (sectionId: string) => {
     try {
@@ -55,13 +70,33 @@ const TeacherAttendanceManagement: React.FC = () => {
           lastName: student.lastName
         }));
         setStudents(fetchedStudents);
-        
-        // Initialize all students as present by default
-        const initialStatuses: {[key: number]: 'PRESENT' | 'ABSENT' | 'LATE'} = {};
-        fetchedStudents.forEach((student: Student) => {
-          initialStatuses[student.id] = 'PRESENT';
-        });
-        setAttendanceStatuses(initialStatuses);
+        updateDisplayedStudents(fetchedStudents, 1, searchQuery);
+
+        // Fetch attendance data
+        const attendanceResponse = await fetch(`https://neevschool.sbs/school/getAttendance/${sectionId}`);
+        const attendanceData = await attendanceResponse.json();
+
+        if (attendanceData.status && attendanceData.data) {
+          if (attendanceData.data.length === 0) {
+            // If no attendance data, set all students as present
+            const initialStatuses: {[key: number]: 'PRESENT' | 'ABSENT' | 'LATE'} = {};
+            fetchedStudents.forEach((student: Student) => {
+              initialStatuses[student.id] = 'PRESENT';
+            });
+            setAttendanceStatuses(initialStatuses);
+          } else {
+            // If attendance data exists, set the statuses from the API
+            const attendanceStatuses: {[key: number]: 'PRESENT' | 'ABSENT' | 'LATE'} = {};
+            fetchedStudents.forEach((student: Student) => {
+              const attendanceRecord = attendanceData.data.find(
+                (record: any) => record.studentId === student.studentUserId
+              );
+              attendanceStatuses[student.id] = attendanceRecord?.status || 'PRESENT';
+            });
+            setAttendanceStatuses(attendanceStatuses);
+            setIsEditing(true);
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching students:', error);
@@ -84,36 +119,40 @@ const TeacherAttendanceManagement: React.FC = () => {
     }));
   };
 
-
   const formatDateAnirudhJugaad = (dateString: string) => {
     const date = new Date(dateString);
-    
-    // Get year
     const year = date.getFullYear();
-    
-    // Get month (adding 1 because getMonth() returns 0-11)
-    // padStart ensures two digits with leading zero if needed
     const month = String(date.getMonth() + 1).padStart(2, '0');
-    
-    // Get day and ensure two digits
     const day = String(date.getDate()).padStart(2, '0');
-    
-    // Return formatted date string
     return `${year}-${month}-${day}`;
   };
 
-  const submitAttendance = async () => {
+  const handleSubmitAttendance = async () => {
     try {
       setSubmitting(true);
       
-      const records = students.map(student => ({
+      const currentStudentIds = displayedStudents.map(s => s.id);
+      const hasEmptyAttendance = currentStudentIds.some(id => !attendanceStatuses[id]);
+      
+      if (hasEmptyAttendance) {
+        Alert.alert('Error', 'Please mark attendance for all students on this page');
+        return;
+      }
+
+      const nextPage = currentPage + 1;
+      const totalPages = Math.ceil(students.length / STUDENTS_PER_PAGE);
+      const isLastPage = nextPage > totalPages;
+
+      const records = displayedStudents.map(student => ({
         studentId: student.studentUserId,
         status: attendanceStatuses[student.id]
       }));
 
       const payload = {
+        sectionId: +sectionId,
         attendanceDate: formatDateAnirudhJugaad(date),
         records: records
+        // isAttendanceSubmitted: isLastPage
       };
 
       const response = await fetch('https://neevschool.sbs/school/submitAttendance', {
@@ -127,20 +166,25 @@ const TeacherAttendanceManagement: React.FC = () => {
       const data = await response.json();
       
       if (data.success) {
-        const presentCount = Object.values(attendanceStatuses).filter(status => status === 'PRESENT').length;
-        const lateCount = Object.values(attendanceStatuses).filter(status => status === 'LATE').length;
-        const absentCount = Object.values(attendanceStatuses).filter(status => status === 'ABSENT').length;
+        if (!isLastPage) {
+          setCurrentPage(nextPage);
+          updateDisplayedStudents(students, nextPage, searchQuery);
+          Alert.alert('Success', 'Attendance submitted successfully! Moving to next page...');
+        } else {
+          const presentCount = Object.values(attendanceStatuses).filter(status => status === 'PRESENT').length;
+          const lateCount = Object.values(attendanceStatuses).filter(status => status === 'LATE').length;
+          const absentCount = Object.values(attendanceStatuses).filter(status => status === 'ABSENT').length;
 
-        Alert.alert(
-          'Success', 
-          `Attendance Submitted\n\nSummary:\nPresent: ${presentCount}\nLate: ${lateCount}\nAbsent: ${absentCount}`,
-          [{ text: 'OK', onPress: () => router.back() }]
-        );
+          Alert.alert(
+            'Success', 
+            `Attendance Submitted\n\nSummary:\nPresent: ${presentCount}\nLate: ${lateCount}\nAbsent: ${absentCount}`,
+            [{ text: 'OK', onPress: () => router.back() }]
+          );
+        }
       } else {
         throw new Error(data.message || 'Failed to submit attendance');
       }
     } catch (error) {
-      console.error('Error submitting attendance:', error);
       Alert.alert('Error', 'Failed to submit attendance. Please try again.');
     } finally {
       setSubmitting(false);
@@ -207,6 +251,18 @@ const TeacherAttendanceManagement: React.FC = () => {
         <Text style={styles.dateText}>{date}</Text>
       </View>
 
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search students..."
+          value={searchQuery}
+          onChangeText={(text) => {
+            setSearchQuery(text);
+            updateDisplayedStudents(students, 1, text);
+          }}
+        />
+      </View>
+
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2196F3" />
@@ -215,7 +271,7 @@ const TeacherAttendanceManagement: React.FC = () => {
       ) : (
         <>
           <FlatList
-            data={students}
+            data={displayedStudents}
             renderItem={renderStudentItem}
             keyExtractor={(item) => item.id.toString()}
             contentContainerStyle={styles.studentList}
@@ -225,15 +281,27 @@ const TeacherAttendanceManagement: React.FC = () => {
           />
 
           {students.length > 0 && (
+            <View style={styles.paginationContainer}>
+              <Text style={styles.paginationText}>
+                Page {currentPage} of {Math.ceil(students.length / STUDENTS_PER_PAGE)}
+              </Text>
+            </View>
+          )}
+
+          {students.length > 0 && (
             <TouchableOpacity 
               style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-              onPress={submitAttendance}
+              onPress={handleSubmitAttendance}
               disabled={submitting}
             >
               {submitting ? (
                 <ActivityIndicator color="white" />
               ) : (
-                <Text style={styles.submitButtonText}>Submit Attendance</Text>
+                <Text style={styles.submitButtonText}>
+                  {currentPage === Math.ceil(students.length / STUDENTS_PER_PAGE)
+                    ? "Submit All Attendance"
+                    : "Submit & Continue"}
+                </Text>
               )}
             </TouchableOpacity>
           )}
@@ -274,6 +342,18 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 16,
     color: '#666',
+  },
+  searchContainer: {
+    padding: 15,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  searchInput: {
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    borderRadius: 8,
+    fontSize: 16,
   },
   studentList: {
     padding: 16,
@@ -370,6 +450,17 @@ const styles = StyleSheet.create({
     marginTop: 50,
     color: '#666',
     fontSize: 16,
+  },
+  paginationContainer: {
+    padding: 15,
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  paginationText: {
+    textAlign: 'center',
+    marginBottom: 10,
+    color: '#666',
   },
 });
 

@@ -5,14 +5,13 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "y"
+      "bundleIdentifier": "com.neevlearn.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -20,9 +19,6 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.neevlearn.app",
-      "permissions": [
-        "NOTIFICATIONS"
-      ],
       "usesCleartextTraffic": true
     },
     "web": {
@@ -31,6 +27,13 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#ffffff"
+        }
+      ],
       "expo-router",
       "expo-font",
       [
@@ -44,14 +47,7 @@
         }
       ]
     ],
-    "experiments": {
-      "typedRoutes": true
-    },
-    "newArchEnabled": true,
     "extra": {
-      "router": {
-        "origin": false
-      },
       "eas": {
         "projectId": "5f60753c-7b66-4fb8-872c-b6172aea6cc6"
       }
