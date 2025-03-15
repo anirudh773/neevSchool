@@ -93,7 +93,6 @@ const ClassSectionsScreen = () => {
           }
         }
       } catch (error) {
-        console.error('Error loading classes:', error);
       } finally {
         setLoading(false);
       }

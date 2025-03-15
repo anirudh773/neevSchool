@@ -77,7 +77,6 @@ const TimeTableManager = () => {
         setClasses(parsedData || []);
       }
     } catch (error) {
-      console.error('Error loading classes:', error);
       setError('Failed to load class data');
     } finally {
       setIsLoading(prev => ({ ...prev, classes: false }));
@@ -130,7 +129,6 @@ const TimeTableManager = () => {
         setCellSubjects(newCellSubjects);
       }
     } catch (error) {
-      console.error('Error fetching timetable:', error);
       setError('Failed to load existing timetable');
     } finally {
       setIsLoading(prev => ({ ...prev, timetable: false }));
@@ -174,7 +172,6 @@ const TimeTableManager = () => {
         throw new Error(result.message || 'Failed to update timetable');
       }
     } catch (error) {
-      console.error('Error updating timetable:', error);
       Alert.alert('Error', error.message || 'Failed to update timetable');
     } finally {
       setIsLoading(prev => ({ ...prev, update: false }));
@@ -279,7 +276,6 @@ const TimeTableManager = () => {
         throw new Error(result.message || 'Failed to fetch schedule data');
       }
     } catch (error) {
-      console.error('Error fetching master data:', error);
       setError('Failed to load schedule data. Please try again.');
     } finally {
       setIsLoading(prev => ({ ...prev, masterData: false }));
@@ -379,7 +375,6 @@ const TimeTableManager = () => {
         throw new Error(result.message || 'Failed to save schedule');
       }
     } catch (error) {
-      console.error('Error saving schedule:', error);
       Alert.alert('Error', error.message || 'Failed to save schedule. Please try again.');
     } finally {
       setIsLoading(prev => ({ ...prev, update: false }));

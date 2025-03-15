@@ -447,7 +447,6 @@ const TeacherListing: React.FC = () => {
                     setSchoolId(userData.schoolId);
                 }
             } catch (error) {
-                console.error('Error getting user data:', error);
             }
         };
         
@@ -508,7 +507,6 @@ const TeacherListing: React.FC = () => {
                     await loadSubjects();
                 }
             } catch (error) {
-                console.error('Error loading data:', error);
             }
         };
 
@@ -600,7 +598,6 @@ const TeacherListing: React.FC = () => {
                 Alert.alert('Error', data.message || 'Failed to update teacher');
             }
         } catch (error) {
-            console.error('Update error:', error);
             Alert.alert('Error', 'Network error while updating teacher');
         } finally {
             setEditLoading(false);

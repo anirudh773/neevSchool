@@ -44,7 +44,6 @@ const TeacherProfile = () => {
         setProfile(userData);
       }
     } catch (error) {
-      console.error('Error loading profile:', error);
       Alert.alert('Error', 'Failed to load profile');
     } finally {
       setLoading(false);
@@ -73,7 +72,6 @@ const TeacherProfile = () => {
         await uploadImage(imageUri);
       }
     } catch (error) {
-      console.error('Error picking image:', error);
       Alert.alert('Error', 'Failed to pick image');
     }
   };
@@ -106,7 +104,6 @@ const TeacherProfile = () => {
         throw new Error(result.message || 'Failed to upload image');
       }
     } catch (error) {
-      console.error('Error uploading image:', error);
       Alert.alert('Error', 'Failed to upload image');
     } finally {
       setUploading(false);

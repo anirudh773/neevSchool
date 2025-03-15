@@ -272,7 +272,6 @@ const ExamScheduleApp: React.FC = () => {
         Alert.alert('Error', result.message || 'Failed to load exams');
       }
     } catch (error) {
-      console.error('Error loading exams:', error);
       Alert.alert('Error', 'Failed to load exam data');
     } finally {
       setLoading(false);

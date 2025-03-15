@@ -68,7 +68,6 @@ const YourTimetable = () => {
           fetchTimetable(parsedUserInfo)
         ])
       } catch (error) {
-        console.error('Error initializing data:', error)
       } finally {
         setIsLoading(false)
       }
@@ -90,7 +89,6 @@ const YourTimetable = () => {
         setSelectedDay(result.data.schoolDays[0]?.dayName || '')
       }
     } catch (err) {
-      console.error('Error fetching master data:', err)
     }
   }
 
@@ -108,7 +106,6 @@ const YourTimetable = () => {
         setTimetableData(result.data)
       }
     } catch (error) {
-      console.error('Error fetching timetable:', error)
     } finally {
       setIsLoading(false)
     }

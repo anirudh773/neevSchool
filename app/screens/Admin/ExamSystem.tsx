@@ -150,7 +150,7 @@ const ExamDashboardScreen: React.FC = () => {
       }
 
     } catch (err) {
-      console.error('Error loading exam data:', err);
+
       Alert.alert('Error', 'Failed to load exam data');
     } finally {
       setLoading(false);

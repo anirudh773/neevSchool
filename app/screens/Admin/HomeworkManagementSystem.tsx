@@ -138,7 +138,6 @@ const TeacherHomeworkManager: React.FC = () => {
         throw new Error(result.message || 'Failed to fetch subjects');
       }
     } catch (error) {
-      console.error('Error loading subjects:', error);
       Alert.alert('Error', 'Failed to load subjects');
     } finally {
       setLoading(false);
@@ -172,7 +171,6 @@ const TeacherHomeworkManager: React.FC = () => {
       }
     } catch (err) {
       Alert.alert('Error', 'Failed to pick document');
-      console.error('Document picking error:', err);
     }
   };
 

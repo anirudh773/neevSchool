@@ -155,11 +155,8 @@ const HolidayListView: React.FC = () => {
         if (isMounted.current && animationsReady.current) {
           animateEntrance();
         }
-      } else {
-        console.error('Failed to fetch holidays:', result.message);
       }
     } catch (error) {
-      console.error('Error fetching holidays:', error);
     } finally {
       if (isMounted.current) {
         setLoading(false);

@@ -60,7 +60,6 @@ const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
     const [currentSchedule, setCurrentSchedule] = useState<Partial<ExamScheduleForm>>({});
     const [showStartDatePicker, setShowStartDatePicker] = useState(false);
     const [showEndDatePicker, setShowEndDatePicker] = useState(false);
-    const [showTimePicker, setShowTimePicker] = useState(false);
     const [loading, setLoading] = useState(false)
 
     const [showExamDatePicker, setShowExamDatePicker] = useState(false);
@@ -239,7 +238,6 @@ const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
             }
         } catch (error) {
             setLoading(false)
-            console.error('Exam Creation Error:', error);
             // Handle different types of errors
             Alert.alert('Error in exam Creation');
         }

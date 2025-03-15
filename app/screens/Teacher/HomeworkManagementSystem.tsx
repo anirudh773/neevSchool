@@ -131,7 +131,6 @@ const TeacherHomeworkManager: React.FC = () => {
         loadSubjectsData()
       ]);
     } catch (error) {
-      console.error('Error loading initial data:', error);
     } finally {
       setLoading(false);
     }
@@ -155,7 +154,6 @@ const TeacherHomeworkManager: React.FC = () => {
         setClasses(parsedData || []);
       }
     } catch (error) {
-      console.error('Error loading classes:', error);
       Alert.alert('Error', 'Failed to load classes');
     } finally {
       setLoading(false);
@@ -196,7 +194,6 @@ const TeacherHomeworkManager: React.FC = () => {
         throw new Error(result.message || 'Failed to fetch subjects');
       }
     } catch (error) {
-      console.error('Error loading subjects:', error);
       Alert.alert('Error', 'Failed to load subjects');
     } finally {
       setLoading(false);
@@ -230,7 +227,6 @@ const TeacherHomeworkManager: React.FC = () => {
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to upload image');
-      console.error(error);
     } finally {
       setUploadingImage(false);
     }
@@ -289,7 +285,6 @@ const TeacherHomeworkManager: React.FC = () => {
         setHomeworkList(result.data);
       }
     } catch (error) {
-      console.error('Error fetching homework:', error);
       Alert.alert('Error', 'Failed to fetch homework list');
     } finally {
       setIsLoadingList(false);

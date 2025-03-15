@@ -212,7 +212,6 @@ const LoginPage = () => {
         trigger: null, // Show immediately
       });
     } catch (error) {
-      console.error('Error sending test notification:', error);
     }
   };
 
@@ -296,7 +295,6 @@ const LoginPage = () => {
 
       router.replace('../(tab)');
     } catch (error) {
-      console.error('Login Error:', error);
       Alert.alert('Error', error.message || 'Something went wrong! Please try again later.');
     } finally {
       setLoading(false);

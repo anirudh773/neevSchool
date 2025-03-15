@@ -70,7 +70,6 @@ const TeacherWeeklyTimetable = () => {
         await fetchTeacherSchedule(userInfo.schoolId, userInfo.teacherId)
       }
     } catch (error) {
-      console.error('Error loading user info:', error)
     }
   }
 
@@ -86,7 +85,6 @@ const TeacherWeeklyTimetable = () => {
         setTimetableData(result.data.schedule)
       }
     } catch (error) {
-      console.error('Error fetching schedule:', error)
     } finally {
       setIsLoading(false)
     }

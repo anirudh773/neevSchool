@@ -137,7 +137,6 @@ const RegisterTeacher: React.FC = () => {
         throw new Error(data.message || 'Failed to load master data');
       }
     } catch (err) {
-      console.error('Error loading master data:', err);
       Alert.alert('Error', 'Failed to load master data');
     } finally {
       setLoading(false);

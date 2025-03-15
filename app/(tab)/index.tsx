@@ -51,7 +51,6 @@ const HomeScreen = () => {
         router.replace('./');
       }
     } catch (error) {
-      console.error('Error loading user data:', error);
       Alert.alert('Error', 'Failed to load user data');
     } finally {
       setLoading(false);
@@ -127,7 +126,7 @@ const HomeScreen = () => {
           <View style={styles.headerRight}>
             <TouchableOpacity 
               style={styles.profileButton}
-              onPress={handleProfilePress}
+              // onPress={handleProfilePress}
             >
               <FontAwesome name="user-circle" size={35} color="#007AFF" />
             </TouchableOpacity>

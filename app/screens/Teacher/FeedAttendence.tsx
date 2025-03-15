@@ -99,7 +99,6 @@ const TeacherAttendanceManagement: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Error fetching students:', error);
       Alert.alert('Error', 'Failed to fetch students. Please try again.');
     } finally {
       setLoading(false);

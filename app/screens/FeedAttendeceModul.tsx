@@ -138,7 +138,6 @@ const AttendanceAnalytics: React.FC = () => {
 			setLoading(false);
 		} catch (error) {
 			setLoading(false);
-			console.error('Error fetching attendance:', error);
 			setError('Failed to fetch attendance data. Please try again.');
 		}
 	};
@@ -284,7 +283,6 @@ const AttendanceAnalytics: React.FC = () => {
 			}
 			setWeeklyTrends(generateWeeklyTrends());
 		} catch (error) {
-			console.error('Error loading classes:', error);
 			setError('Failed to load class data. Please try again.');
 		} finally {
 			setLoading(false);

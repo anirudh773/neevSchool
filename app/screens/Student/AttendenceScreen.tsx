@@ -166,7 +166,6 @@ const AttendanceCalendar: React.FC = () => {
         }
       } catch (error) {
         Alert.alert('Error', 'Failed to fetch attendance data');
-        console.error(error);
       } finally {
         setLoading(false);
       }

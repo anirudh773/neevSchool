@@ -68,7 +68,6 @@ const RegisterTeacher: React.FC = () => {
         return;
       }
       if (response.errorCode || !response.assets) {
-        console.error("File selection error:", response.errorCode);
         Alert.alert('Error', 'File selection failed. Please try again.');
         return;
       }
@@ -116,7 +115,6 @@ const RegisterTeacher: React.FC = () => {
           // Handle upload errors
           setUploading(false);
           Alert.alert('Error', 'Failed to upload file.');
-          console.error(error);
         },
         async () => {
           // Get the download URL after successful upload
@@ -130,7 +128,6 @@ const RegisterTeacher: React.FC = () => {
     } catch (error) {
       setUploading(false);
       Alert.alert('Error', 'Failed to upload file. Please try again.');
-      console.error(error);
     }
   };
 

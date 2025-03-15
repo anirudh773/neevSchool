@@ -120,7 +120,6 @@ const HolidayList = () => {
         setHolidays(formattedHolidays);
       }
     } catch (error) {
-      console.error('Error fetching holidays', error);
       if (isMounted.current) {
         Alert.alert('Error', 'Could not fetch holidays');
       }
@@ -170,7 +169,6 @@ const HolidayList = () => {
                 throw new Error(result.message);
               }
             } catch (error) {
-              console.error('Error deleting holiday:', error);
               Alert.alert('Error', 'Failed to delete holiday');
             } finally {
               setActionLoading(false);
@@ -237,7 +235,6 @@ const HolidayList = () => {
         throw new Error(result.message);
       }
     } catch (error) {
-      console.error('Error saving holiday', error);
       Alert.alert('Error', `Could not ${isEditMode ? 'update' : 'add'} holiday`);
     } finally {
       setActionLoading(false);
