@@ -52,6 +52,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     marginBottom: 10,
+    borderRadius: 15,
   },
   companyName: {
     fontSize: 22,
@@ -286,7 +287,7 @@ const LoginPage = () => {
       // Role-specific storage logic
       if (data.userInfo?.role === 2) {
         await SecureStore.setItemAsync('teacherClasses', JSON.stringify(data.teacherClasses));
-      } else if ([1, 2].includes(data.userInfo?.role)) {
+      } else if ([1, 2, 4].includes(data.userInfo?.role)) {
         await SecureStore.setItemAsync('schoolClasses', JSON.stringify(data.classes));
       }
 
