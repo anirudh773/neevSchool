@@ -19,6 +19,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.neevlearn.app",
+      "versionCode": 3,
       "usesCleartextTraffic": true
     },
     "web": {
