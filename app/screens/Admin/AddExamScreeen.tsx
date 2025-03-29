@@ -24,29 +24,20 @@ interface ExamScheduleForm {
 
 // CreateExamScreen.tsx
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, Text, Dimensions, Alert } from 'react-native';
-import { TextInput, Button, Card, Title, Subheading, Portal, Modal, IconButton, Surface } from 'react-native-paper';
-import { useLocalSearchParams } from 'expo-router';
+import { View, ScrollView, StyleSheet, Text, Dimensions, Alert, Platform } from 'react-native';
+import { TextInput, Button, Card, Title, Portal, Modal, IconButton, Surface, ActivityIndicator } from 'react-native-paper';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { SafeAreaView } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as SecureStore from 'expo-secure-store';
-import { useRouter } from 'expo-router';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-interface CreateExamScreenProps {
-    route: {
-        params: {
-            selectedClasses: number[],
-            selectedSection: number[]
-        }
-    }
-}
-
-const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
-    let router = useRouter();
+const AddExamScreen = () => {
+    const router = useRouter();
     const { selectedClasses } = useLocalSearchParams();
+    const [loading, setLoading] = useState(false);
     const [examDetails, setExamDetails] = useState({
         examName: '',
         id: null as number | null,
@@ -60,38 +51,130 @@ const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
     const [currentSchedule, setCurrentSchedule] = useState<Partial<ExamScheduleForm>>({});
     const [showStartDatePicker, setShowStartDatePicker] = useState(false);
     const [showEndDatePicker, setShowEndDatePicker] = useState(false);
-    const [loading, setLoading] = useState(false)
-
     const [showExamDatePicker, setShowExamDatePicker] = useState(false);
     const [showExamTimePicker, setShowExamTimePicker] = useState(false);
     const [examDate, setExamDate] = useState(new Date());
     const [examTime, setExamTime] = useState(new Date());
     const [subjects, setSubjects] = useState<Subject[]>([]);
-    const [examTypes, setExamTypes] = useState<ExamType[]>([])
+    const [examTypes, setExamTypes] = useState<ExamType[]>([]);
 
     useEffect(() => {
-        const fetchSecureStoreData = async () => {
-            try {
-                // Fetch exam types
-                const examTypesJson = await SecureStore.getItemAsync('examType');
-                if (examTypesJson) {
-                    const parsedExamTypes = JSON.parse(examTypesJson);
-                    setExamTypes(parsedExamTypes);
-                }
-
-                // Fetch subjects
-                const subjectsJson = await SecureStore.getItemAsync('subjectBySchool');
-                if (subjectsJson) {
-                    const parsedSubjects = JSON.parse(subjectsJson);
-                    setSubjects(parsedSubjects);
-                }
-            } catch (error) {
-                Alert.alert('Error', 'Failed to load subjects and exam types');
-            }
-        };
-
-        fetchSecureStoreData();
+        loadInitialData();
     }, []);
+
+    const loadInitialData = async () => {
+        try {
+            const [examTypesJson, subjectsJson] = await Promise.all([
+                SecureStore.getItemAsync('examType'),
+                SecureStore.getItemAsync('subjectBySchool')
+            ]);
+
+            if (examTypesJson) {
+                setExamTypes(JSON.parse(examTypesJson));
+            }
+            if (subjectsJson) {
+                setSubjects(JSON.parse(subjectsJson));
+            }
+        } catch (error) {
+            Alert.alert('Error', 'Failed to load exam data');
+        }
+    };
+
+    const handleAddSchedule = () => {
+        if (!isScheduleValid(currentSchedule)) {
+            Alert.alert('Validation Error', 'Please fill all required fields');
+            return;
+        }
+
+        const newSchedule = currentSchedule as ExamScheduleForm;
+        if (newSchedule.exam_datetime < examDetails.start_date || 
+            newSchedule.exam_datetime > examDetails.end_date) {
+            Alert.alert('Invalid Date', 'Exam date must be within the selected date range');
+            return;
+        }
+
+        if (checkScheduleConflicts(newSchedule)) {
+            return;
+        }
+
+        setSchedules([...schedules, newSchedule]);
+        setCurrentSchedule({});
+        setSubjectModalVisible(false);
+    };
+
+    const handleCreateExam = async () => {
+        if (!validateExamDetails()) {
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const userData = await SecureStore.getItemAsync('userData');
+            if (!userData) {
+                throw new Error('User data not found');
+            }
+
+            const userDatas = JSON.parse(userData);
+            if (!userDatas.schoolId) {
+                throw new Error('School ID not found');
+            }
+
+            const examData = {
+                exam_name: examDetails.examName,
+                exam_type_id: examDetails.id,
+                school_id: parseInt(userDatas.schoolId),
+                start_date: examDetails.start_date.toISOString(),
+                end_date: examDetails.end_date.toISOString(),
+                schedules: schedules.map(schedule => ({
+                    subject_id: schedule.subject_id,
+                    class_id: +selectedClasses,
+                    exam_datetime: schedule.exam_datetime.toISOString(),
+                    duration_minutes: schedule.duration_minutes,
+                    max_marks: schedule.max_marks,
+                    passing_marks: schedule.passing_marks,
+                    topics: schedule.topics || ''
+                }))
+            };
+
+            const response = await fetch('https://neevschool.sbs/school/submitExamBySchoolId', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(examData),
+            });
+
+            if (response.ok) {
+                Alert.alert('Success', 'Exam created successfully', [
+                    { text: 'OK', onPress: () => router.back() }
+                ]);
+            } else {
+                throw new Error('Failed to create exam');
+            }
+        } catch (error) {
+            Alert.alert('Error', 'Failed to create exam. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const validateExamDetails = () => {
+        if (!examDetails.examName) {
+            Alert.alert('Validation Error', 'Please enter an exam name');
+            return false;
+        }
+        if (!examDetails.id) {
+            Alert.alert('Validation Error', 'Please select an exam type');
+            return false;
+        }
+        if (schedules.length === 0) {
+            Alert.alert('Validation Error', 'Please add at least one subject schedule');
+            return false;
+        }
+        if (examDetails.start_date > examDetails.end_date) {
+            Alert.alert('Validation Error', 'Start date must be before end date');
+            return false;
+        }
+        return true;
+    };
 
     const isScheduleValid = (schedule: Partial<ExamScheduleForm>): boolean => {
         return !!(
@@ -115,7 +198,6 @@ const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
             return true;
         }
 
-        // Check if the new schedule overlaps with existing schedules
         for (const schedule of existingSchedulesOnDay) {
             const existingStart = new Date(schedule.exam_datetime);
             const existingEnd = new Date(existingStart.getTime() + schedule.duration_minutes * 60000);
@@ -135,125 +217,13 @@ const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
         return false;
     };
 
-    const handleAddSchedule = () => {
-        if (isScheduleValid(currentSchedule)) {
-            const newSchedule = currentSchedule as ExamScheduleForm;
-            
-            // Check if the exam date is within the selected date range
-            if (newSchedule.exam_datetime < examDetails.start_date || 
-                newSchedule.exam_datetime > examDetails.end_date) {
-                Alert.alert('Invalid Date', 'Exam date must be within the selected date range.');
-                return;
-            }
-
-            // Check for scheduling conflicts
-            if (checkScheduleConflicts(newSchedule)) {
-                return;
-            }
-
-            setSchedules([...schedules, newSchedule]);
-            setCurrentSchedule({});
-            setSubjectModalVisible(false);
-        }
-    };
-
-
-    const handleCreateExam = async () => {
-        setLoading(true)
-        // Validation checks
-        if (!examDetails.examName) {
-            Alert.alert('Validation Error', 'Please enter an exam name');
-            return;
-        }
-    
-        if (!examDetails.id) {
-            Alert.alert('Validation Error', 'Please select an exam type');
-            return;
-        }
-    
-        if (schedules.length === 0) {
-            Alert.alert('Validation Error', 'Please add at least one subject schedule');
-            return;
-        }
-    
-        // Ensure exam dates are valid
-        if (examDetails.start_date > examDetails.end_date) {
-            Alert.alert('Validation Error', 'Start date must be before end date');
-            return;
-        }
-        try {
-            // Retrieve school ID from secure store
-            const userData = await SecureStore.getItemAsync('userData');
-            const userDatas = JSON.parse(userData)
-            if (userDatas && !userDatas.schoolId) {
-                throw new Error('School ID not found');
-            }
-    
-            // Prepare exam data for submission
-            const examData = {
-                exam_name: examDetails.examName,
-                exam_type_id: examDetails.id,
-                school_id: parseInt(userDatas.schoolId),
-                start_date: examDetails.start_date.toISOString(),
-                end_date: examDetails.end_date.toISOString(),
-                schedules: schedules.map(schedule => ({
-                    subject_id: schedule.subject_id,
-                    class_id: +selectedClasses,
-                    exam_datetime: schedule.exam_datetime.toISOString(),
-                    duration_minutes: schedule.duration_minutes,
-                    max_marks: schedule.max_marks,
-                    passing_marks: schedule.passing_marks,
-                    topics: schedule.topics || ''
-                }))
-            };
-
-
-              const response = await fetch('https://neevschool.sbs/school/submitExamBySchoolId', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(examData),
-              });
-    
-            // Handle successful response
-            if (response.ok) {
-                setLoading(false)
-                Alert.alert('Success', 'Exam created successfully', [
-                    { 
-                        text: 'OK', 
-                        onPress: () => {
-                            // Reset form or navigate to another screen
-                            setExamDetails({
-                                examName: '',
-                                id: null,
-                                start_date: new Date(),
-                                end_date: new Date()
-                            });
-                            setSchedules([]);
-                            router.back()
-                        } 
-                    }
-                ]);
-            }
-        } catch (error) {
-            setLoading(false)
-            // Handle different types of errors
-            Alert.alert('Error in exam Creation');
-        }
-        setLoading(false)
-    }
-
-    const handleDeleteSchedule = (index: number) => {
-        setSchedules(schedules.filter((_, i) => i !== index));
-    };
-
     const renderDateTimePickers = () => (
-        <>
+        <View style={styles.datePickersContainer}>
             <Button
                 mode="outlined"
                 onPress={() => setShowStartDatePicker(true)}
                 style={styles.dateButton}
+                icon="calendar"
             >
                 {`Start Date: ${examDetails.start_date.toLocaleDateString()}`}
             </Button>
@@ -262,6 +232,7 @@ const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
                 mode="outlined"
                 onPress={() => setShowEndDatePicker(true)}
                 style={styles.dateButton}
+                icon="calendar"
             >
                 {`End Date: ${examDetails.end_date.toLocaleDateString()}`}
             </Button>
@@ -292,39 +263,41 @@ const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
                     }}
                 />
             )}
-        </>
+        </View>
     );
 
     const renderDateTimeSelection = () => {
-        const formatTime = (date: any) => {
+        const formatTime = (date: Date) => {
             return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         };
-    
-        const combineDateAndTime = (date: any, time: any) => {
+
+        const combineDateAndTime = (date: Date, time: Date) => {
             const combined = new Date(date);
             combined.setHours(time.getHours());
             combined.setMinutes(time.getMinutes());
             return combined;
         };
-    
+
         return (
-            <>
+            <View style={styles.dateTimeContainer}>
                 <Button
                     mode="outlined"
                     onPress={() => setShowExamDatePicker(true)}
                     style={styles.dateButton}
+                    icon="calendar"
                 >
                     {examDate ? `Exam Date: ${examDate.toLocaleDateString()}` : "Select Exam Date"}
                 </Button>
-    
+
                 <Button
                     mode="outlined"
                     onPress={() => setShowExamTimePicker(true)}
                     style={styles.dateButton}
+                    icon="clock"
                 >
                     {examTime ? `Exam Time: ${formatTime(examTime)}` : "Select Exam Time"}
                 </Button>
-    
+
                 {showExamDatePicker && (
                     <DateTimePicker
                         value={examDate}
@@ -335,7 +308,6 @@ const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
                             setShowExamDatePicker(false);
                             if (selectedDate) {
                                 setExamDate(selectedDate);
-                                // Combine date and time when date is selected
                                 const combinedDateTime = combineDateAndTime(selectedDate, examTime);
                                 setCurrentSchedule({
                                     ...currentSchedule,
@@ -345,7 +317,7 @@ const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
                         }}
                     />
                 )}
-    
+
                 {showExamTimePicker && (
                     <DateTimePicker
                         value={examTime}
@@ -354,7 +326,6 @@ const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
                             setShowExamTimePicker(false);
                             if (selectedTime) {
                                 setExamTime(selectedTime);
-                                // Combine date and time when time is selected
                                 const combinedDateTime = combineDateAndTime(examDate, selectedTime);
                                 setCurrentSchedule({
                                     ...currentSchedule,
@@ -364,7 +335,7 @@ const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
                         }}
                     />
                 )}
-            </>
+            </View>
         );
     };
 
@@ -376,20 +347,46 @@ const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
                 contentContainerStyle={styles.modal}
             >
                 <Surface style={styles.modalContent}>
-                    <Title style={styles.modalTitle}>Select Exam Type</Title>
-                    {examTypes.map((type) => (
-                        <Button
-                            key={type.id}
-                            mode={examDetails.id === type.id ? "contained" : "outlined"}
-                            onPress={() => {
-                                setExamDetails({ ...examDetails, id: type.id });
-                                setExamTypeModalVisible(false);
-                            }}
-                            style={styles.modalButton}
-                        >
-                            {type.examName}
-                        </Button>
-                    ))}
+                    <View style={styles.modalHeader}>
+                        <Title style={styles.modalTitle}>Select Exam Type</Title>
+                        <IconButton
+                            icon="close"
+                            size={24}
+                            onPress={() => setExamTypeModalVisible(false)}
+                            style={styles.closeButton}
+                        />
+                    </View>
+                    <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+                        <View style={styles.examTypeGrid}>
+                            {examTypes.map((type) => (
+                                <Card
+                                    key={type.id}
+                                    style={[
+                                        styles.examTypeCard,
+                                        examDetails.id === type.id && styles.selectedExamTypeCard
+                                    ]}
+                                    onPress={() => {
+                                        setExamDetails({ ...examDetails, id: type.id });
+                                        setExamTypeModalVisible(false);
+                                    }}
+                                >
+                                    <Card.Content style={styles.examTypeCardContent}>
+                                        <Text style={[
+                                            styles.examTypeText,
+                                            examDetails.id === type.id && styles.selectedExamTypeText
+                                        ]}>
+                                            {type.examName}
+                                        </Text>
+                                        {type.description && (
+                                            <Text style={styles.examTypeDescription}>
+                                                {type.description}
+                                            </Text>
+                                        )}
+                                    </Card.Content>
+                                </Card>
+                            ))}
+                        </View>
+                    </ScrollView>
                 </Surface>
             </Modal>
         </Portal>
@@ -403,81 +400,118 @@ const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
                 contentContainerStyle={styles.modal}
             >
                 <Surface style={styles.modalContent}>
-                    <Title style={styles.modalTitle}>Add Subject Schedule</Title>
-    
-                    <View style={styles.subjectSelector}>
-                        {subjects.map((subject) => (
-                            <Button
-                                key={subject.id}
-                                mode={currentSchedule.subject_id === subject.id ? "contained" : "outlined"}
-                                onPress={() => setCurrentSchedule({
-                                    ...currentSchedule,
-                                    subject_id: subject.id
-                                })}
-                                style={styles.subjectButton}
-                            >
-                                {subject.name}
-                            </Button>
-                        ))}
+                    <View style={styles.modalHeader}>
+                        <Title style={styles.modalTitle}>Add Subject Schedule</Title>
+                        <IconButton
+                            icon="close"
+                            size={24}
+                            onPress={() => setSubjectModalVisible(false)}
+                            style={styles.closeButton}
+                        />
                     </View>
-    
-                    {renderDateTimeSelection()}
-    
-                    <TextInput
-                        label="Duration (minutes)"
-                        value={currentSchedule.duration_minutes?.toString() || ''}
-                        onChangeText={(text) => setCurrentSchedule({
-                            ...currentSchedule,
-                            duration_minutes: parseInt(text) || 0
-                        })}
-                        keyboardType="numeric"
-                        style={styles.input}
-                        mode="outlined"
-                    />
-                    <TextInput
-                        label="Topics that will come in exam"
-                        value={currentSchedule.topics?.toString() || ''}
-                        onChangeText={(text) => setCurrentSchedule({
-                            ...currentSchedule,
-                            topics: text
-                        })}
-                        keyboardType='default'
-                        style={styles.input}
-                        mode="outlined"
-                    />
-    
-                    <TextInput
-                        label="Maximum Marks"
-                        value={currentSchedule.max_marks?.toString() || ''}
-                        onChangeText={(text) => setCurrentSchedule({
-                            ...currentSchedule,
-                            max_marks: parseInt(text) || 0
-                        })}
-                        keyboardType="numeric"
-                        style={styles.input}
-                        mode="outlined"
-                    />
-    
-                    <TextInput
-                        label="Passing Marks"
-                        value={currentSchedule.passing_marks?.toString() || ''}
-                        onChangeText={(text) => setCurrentSchedule({
-                            ...currentSchedule,
-                            passing_marks: parseInt(text) || 0
-                        })}
-                        keyboardType="numeric"
-                        style={styles.input}
-                        mode="outlined"
-                    />
-    
-                    <Button
-                        mode="contained"
-                        onPress={handleAddSchedule}
-                        style={styles.addButton}
-                        disabled={!isScheduleValid(currentSchedule)}
-                    >
-                        Add to Schedule
-                    </Button>
+                    <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+                        <View style={styles.subjectSection}>
+                            <Text style={styles.sectionLabel}>Select Subject</Text>
+                            <View style={styles.subjectGrid}>
+                                {subjects.map((subject) => (
+                                    <Card
+                                        key={subject.id}
+                                        style={[
+                                            styles.subjectCard,
+                                            currentSchedule.subject_id === subject.id && styles.selectedSubjectCard
+                                        ]}
+                                        onPress={() => setCurrentSchedule({
+                                            ...currentSchedule,
+                                            subject_id: subject.id
+                                        })}
+                                    >
+                                        <Card.Content style={styles.subjectCardContent}>
+                                            <Text style={[
+                                                styles.subjectText,
+                                                currentSchedule.subject_id === subject.id && styles.selectedSubjectText
+                                            ]}>
+                                                {subject.name}
+                                            </Text>
+                                        </Card.Content>
+                                    </Card>
+                                ))}
+                            </View>
+                        </View>
+
+                        <View style={styles.sectionDivider} />
+
+                        <View style={styles.dateTimeSection}>
+                            <Text style={styles.sectionLabel}>Select Date & Time</Text>
+                            {renderDateTimeSelection()}
+                        </View>
+
+                        <View style={styles.sectionDivider} />
+
+                        <View style={styles.detailsSection}>
+                            <Text style={styles.sectionLabel}>Exam Details</Text>
+                            <View style={styles.inputContainer}>
+                                <TextInput
+                                    label="Duration (minutes)"
+                                    value={currentSchedule.duration_minutes?.toString() || ''}
+                                    onChangeText={(text) => setCurrentSchedule({
+                                        ...currentSchedule,
+                                        duration_minutes: parseInt(text) || 0
+                                    })}
+                                    keyboardType="numeric"
+                                    style={styles.input}
+                                    mode="outlined"
+                                />
+
+                                <TextInput
+                                    label="Topics that will come in exam"
+                                    value={currentSchedule.topics?.toString() || ''}
+                                    onChangeText={(text) => setCurrentSchedule({
+                                        ...currentSchedule,
+                                        topics: text
+                                    })}
+                                    style={styles.input}
+                                    mode="outlined"
+                                    multiline
+                                    numberOfLines={3}
+                                />
+
+                                <TextInput
+                                    label="Maximum Marks"
+                                    value={currentSchedule.max_marks?.toString() || ''}
+                                    onChangeText={(text) => setCurrentSchedule({
+                                        ...currentSchedule,
+                                        max_marks: parseInt(text) || 0
+                                    })}
+                                    keyboardType="numeric"
+                                    style={styles.input}
+                                    mode="outlined"
+                                />
+
+                                <TextInput
+                                    label="Passing Marks"
+                                    value={currentSchedule.passing_marks?.toString() || ''}
+                                    onChangeText={(text) => setCurrentSchedule({
+                                        ...currentSchedule,
+                                        passing_marks: parseInt(text) || 0
+                                    })}
+                                    keyboardType="numeric"
+                                    style={styles.input}
+                                    mode="outlined"
+                                />
+                            </View>
+                        </View>
+
+                        <Button
+                            mode="contained"
+                            onPress={handleAddSchedule}
+                            style={styles.addButton}
+                            disabled={!isScheduleValid(currentSchedule)}
+                            contentStyle={styles.addButtonContent}
+                            icon="plus"
+                        >
+                            Add to Schedule
+                        </Button>
+                    </ScrollView>
                 </Surface>
             </Modal>
         </Portal>
@@ -485,8 +519,8 @@ const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
 
     return (
         <PaperProvider>
-            <SafeAreaView style={{ flex: 1 }}>
-                <ScrollView style={styles.container}>
+            <SafeAreaView style={styles.container}>
+                <ScrollView style={styles.scrollView}>
                     <Card style={styles.card}>
                         <Card.Content>
                             <Title style={styles.title}>Create New Exam</Title>
@@ -503,6 +537,7 @@ const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
                                 mode="outlined"
                                 onPress={() => setExamTypeModalVisible(true)}
                                 style={styles.selectButton}
+                                icon="school"
                             >
                                 {examDetails.id
                                     ? examTypes.find(t => t.id === examDetails.id)?.examName
@@ -511,7 +546,7 @@ const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
 
                             {renderDateTimePickers()}
 
-                            <Subheading style={styles.subheading}>Exam Schedule</Subheading>
+                            <Title style={styles.sectionTitle}>Exam Schedule</Title>
 
                             {schedules.map((schedule, index) => (
                                 <Card key={index} style={styles.scheduleCard}>
@@ -529,11 +564,16 @@ const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
                                             <Text style={styles.scheduleDetail}>
                                                 Marks: {schedule.max_marks} (Pass: {schedule.passing_marks})
                                             </Text>
+                                            {schedule.topics && (
+                                                <Text style={styles.scheduleDetail}>
+                                                    Topics: {schedule.topics}
+                                                </Text>
+                                            )}
                                         </View>
                                         <IconButton
                                             icon="delete"
                                             size={24}
-                                            onPress={() => handleDeleteSchedule(index)}
+                                            onPress={() => setSchedules(schedules.filter((_, i) => i !== index))}
                                         />
                                     </Card.Content>
                                 </Card>
@@ -549,11 +589,11 @@ const CreateExamScreen: React.FC<CreateExamScreenProps> = () => {
                             </Button>
 
                             <Button
-                            loading={loading}
                                 mode="contained"
                                 onPress={handleCreateExam}
                                 style={styles.submitButton}
-                                disabled={!examDetails.examName || !examDetails.id || selectedClasses.length === 0 || schedules.length === 0}
+                                loading={loading}
+                                disabled={loading || !examDetails.examName || !examDetails.id || schedules.length === 0}
                             >
                                 Create Exam
                             </Button>
@@ -573,12 +613,21 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#f5f5f5',
     },
+    scrollView: {
+        flex: 1,
+    },
     card: {
         margin: 16,
         elevation: 4,
     },
     title: {
         marginBottom: 24,
+        color: '#333',
+    },
+    sectionTitle: {
+        marginTop: 24,
+        marginBottom: 16,
+        color: '#333',
     },
     input: {
         marginBottom: 16,
@@ -586,12 +635,14 @@ const styles = StyleSheet.create({
     selectButton: {
         marginBottom: 24,
     },
-    dateButton: {
-        marginBottom: 16,
+    datePickersContainer: {
+        marginBottom: 24,
     },
-    subheading: {
+    dateTimeContainer: {
+        marginBottom: 24,
+    },
+    dateButton: {
         marginBottom: 12,
-        fontWeight: '600',
     },
     scheduleCard: {
         marginBottom: 12,
@@ -600,20 +651,22 @@ const styles = StyleSheet.create({
     scheduleContent: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-start',
     },
     scheduleInfo: {
         flex: 1,
+        marginRight: 8,
     },
     scheduleSubject: {
         fontSize: 16,
         fontWeight: '600',
-        marginBottom: 4,
+        color: '#333',
+        marginBottom: 8,
     },
     scheduleDetail: {
         fontSize: 14,
         color: '#666',
-        marginBottom: 2,
+        marginBottom: 4,
     },
     addButton: {
         marginTop: 8,
@@ -625,30 +678,128 @@ const styles = StyleSheet.create({
     },
     modal: {
         padding: 20,
+        margin: 20,
     },
     modalContent: {
         backgroundColor: 'white',
-        padding: 20,
-        borderRadius: 8,
+        borderRadius: 12,
         elevation: 5,
+        maxHeight: '90%',
+        width: '100%',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e0e0e0',
     },
     modalTitle: {
+        marginBottom: 0,
+        color: '#333',
+        fontSize: 24,
+    },
+    closeButton: {
+        margin: 0,
+    },
+    modalScrollView: {
+        maxHeight: '90%',
+        padding: 16,
+    },
+    sectionLabel: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#333',
         marginBottom: 16,
     },
-    modalButton: {
-        marginBottom: 8,
+    sectionDivider: {
+        height: 1,
+        backgroundColor: '#e0e0e0',
+        marginVertical: 24,
     },
-    subjectSelector: {
+    examTypeGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 12,
+    },
+    examTypeCard: {
+        flex: 1,
+        minWidth: SCREEN_WIDTH > 600 ? SCREEN_WIDTH / 4 - 80 : SCREEN_WIDTH / 2 - 80,
+        marginBottom: 12,
+        elevation: 2,
+    },
+    selectedExamTypeCard: {
+        backgroundColor: '#e3f2fd',
+        borderColor: '#2196f3',
+        borderWidth: 2,
+    },
+    examTypeCardContent: {
+        padding: 16,
+    },
+    examTypeText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 4,
+    },
+    selectedExamTypeText: {
+        color: '#2196f3',
+    },
+    examTypeDescription: {
+        fontSize: 14,
+        color: '#666',
+    },
+    subjectSection: {
+        marginBottom: 24,
+    },
+    subjectGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 8,
         marginBottom: 16,
     },
-    subjectButton: {
-        marginBottom: 8,
+    subjectCard: {
         flex: 1,
-        minWidth: SCREEN_WIDTH > 600 ? SCREEN_WIDTH / 4 - 60 : SCREEN_WIDTH / 2 - 60,
+        minWidth: SCREEN_WIDTH > 600 ? SCREEN_WIDTH / 6 - 40 : SCREEN_WIDTH / 3 - 40,
+        marginBottom: 8,
+        elevation: 2,
+    },
+    selectedSubjectCard: {
+        backgroundColor: '#e8f5e9',
+        borderColor: '#4caf50',
+        borderWidth: 2,
+    },
+    subjectCardContent: {
+        padding: 8,
+        alignItems: 'center',
+    },
+    subjectText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#333',
+        textAlign: 'center',
+    },
+    selectedSubjectText: {
+        color: '#4caf50',
+        fontWeight: '600',
+    },
+    dateTimeSection: {
+        marginBottom: 24,
+    },
+    detailsSection: {
+        marginBottom: 24,
+    },
+    inputContainer: {
+        gap: 16,
+    },
+    addButton: {
+        marginTop: 8,
+        marginBottom: 16,
+    },
+    addButtonContent: {
+        paddingVertical: 8,
     },
 });
 
-export default CreateExamScreen;
+export default AddExamScreen;

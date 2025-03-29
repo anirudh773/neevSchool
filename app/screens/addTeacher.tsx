@@ -20,6 +20,17 @@ import * as SecureStore from 'expo-secure-store';
 import { storage } from '../../firebaseConfig'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
+interface Section {
+  id: number;
+  name: string;
+}
+
+interface Class {
+  id: number;
+  name: string;
+  sections: Section[];
+}
+
 type TeacherData = {
   name: string;
   mobileNumber: string;
@@ -30,6 +41,7 @@ type TeacherData = {
   qualifications: number;
   joiningDate: string;
   schoolId: number;
+  classTeacherOf?: number;
 };
 
 interface Qualifications {
@@ -65,6 +77,13 @@ const RegisterTeacher: React.FC = () => {
   const [showResumeModal, setShowResumeModal] = useState(false);
   const [selectedFileName, setSelectedFileName] = useState<string>('');
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [showClassSelect, setShowClassSelect] = useState(false);
+  const [selectedClassSection, setSelectedClassSection] = useState<{
+    className: string;
+    sectionId: number;
+    sectionName: string;
+  } | null>(null);
+  const [classes, setClasses] = useState<Class[]>([]);
   
   const [formData, setFormData] = useState<TeacherData>({
     name: '',
@@ -76,12 +95,14 @@ const RegisterTeacher: React.FC = () => {
     qualifications: 1,
     joiningDate: new Date().toISOString().split('T')[0],
     schoolId: 1,
+    classTeacherOf: undefined,
   });
 
   useEffect(() => {
     if(qualifications.length === 0){
       loadExamMaterData();
     }
+    loadClasses();
   }, []);
 
   const loadExamMaterData = async () => {
@@ -140,6 +161,17 @@ const RegisterTeacher: React.FC = () => {
       Alert.alert('Error', 'Failed to load master data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadClasses = async () => {
+    try {
+      const classesData = await SecureStore.getItemAsync('schoolClasses');
+      if (classesData) {
+        setClasses(JSON.parse(classesData));
+      }
+    } catch (error) {
+      console.error('Error loading classes:', error);
     }
   };
 
@@ -388,6 +420,71 @@ const RegisterTeacher: React.FC = () => {
     </Modal>
   );
 
+  const ClassSelectionModal = () => (
+    <Modal
+      visible={showClassSelect}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setShowClassSelect(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Class & Section</Text>
+            <TouchableOpacity onPress={() => setShowClassSelect(false)} style={styles.closeButton}>
+              <FontAwesome name="times" size={20} color="#666" />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.modalScroll}>
+            {classes.map((classItem) => (
+              <View key={classItem.id} style={styles.classGroup}>
+                <Text style={styles.classGroupTitle}>Class {classItem.name}</Text>
+                {classItem.sections && classItem.sections.length > 0 ? (
+                  classItem.sections.map((section: Section) => (
+                    <TouchableOpacity
+                      key={`${classItem.id}-${section.id}`}
+                      style={[
+                        styles.classOption,
+                        selectedClassSection?.sectionId === section.id &&
+                        styles.selectedClassOption
+                      ]}
+                      onPress={() => {
+                        setSelectedClassSection({
+                          className: classItem.name,
+                          sectionId: section.id,
+                          sectionName: section.name
+                        });
+                        handleInputChange('classTeacherOf', section.id);
+                        setShowClassSelect(false);
+                      }}
+                    >
+                      <View style={styles.classOptionContent}>
+                        <FontAwesome name="graduation-cap" size={16} color="#666" />
+                        <Text style={[
+                          styles.classOptionText,
+                          selectedClassSection?.sectionId === section.id &&
+                          styles.selectedClassOptionText
+                        ]}>
+                          Section {section.name}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                ) : (
+                  <View style={styles.noSectionsContainer}>
+                    <Text style={styles.noSectionsText}>
+                      No sections available
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -535,6 +632,27 @@ const RegisterTeacher: React.FC = () => {
             />
           </TouchableOpacity>
 
+          <TouchableOpacity 
+            onPress={() => setShowClassSelect(true)}
+            style={styles.dropdownContainer}
+          >
+            <TextInput
+              label="Class Teacher Of (Optional)"
+              value={selectedClassSection 
+                ? `Class ${selectedClassSection.className} - Section ${selectedClassSection.sectionName}`
+                : ''}
+              editable={false}
+              style={styles.input}
+              mode="outlined"
+              right={
+                <TextInput.Icon 
+                  icon="chevron-down" 
+                  onPress={() => setShowClassSelect(true)}
+                />
+              }
+            />
+          </TouchableOpacity>
+
           {formData.resumeUrl && (
             <View style={styles.selectedFileContainer}>
               <View style={styles.selectedFileContent}>
@@ -603,6 +721,7 @@ const RegisterTeacher: React.FC = () => {
 
       <QualificationPickerModal />
       <ResumeUploadModal />
+      <ClassSelectionModal />
     </SafeAreaView>
   );
 };
@@ -810,6 +929,50 @@ const styles = StyleSheet.create({
     padding: 4,
     width: 28,
     alignItems: 'center',
+  },
+  classGroup: {
+    marginBottom: 24,
+  },
+  classGroupTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1A237E',
+    marginBottom: 12,
+    paddingLeft: 8,
+  },
+  classOption: {
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    backgroundColor: '#F8FAFF',
+  },
+  selectedClassOption: {
+    backgroundColor: '#E3F2FD',
+    borderColor: '#2196F3',
+    borderWidth: 1,
+  },
+  classOptionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  classOptionText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  selectedClassOptionText: {
+    color: '#2196F3',
+    fontWeight: '600',
+  },
+  noSectionsContainer: {
+    padding: 12,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  noSectionsText: {
+    color: '#666',
+    fontStyle: 'italic',
   },
 });
 

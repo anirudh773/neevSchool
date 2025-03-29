@@ -24,6 +24,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 interface UserProfile {
+  id: number,
   name: string;
   email: string;
   phone: string;
@@ -127,13 +128,14 @@ const ProfileScreen: React.FC = () => {
       if (!profile?.schoolId) {
         throw new Error('User ID not found');
       }
+      console.log(profile);
 
-      const response = await fetch(`https://neevschool.sbs/school/updateProfilePhoto/${profile.schoolId}`, {
+      const response = await fetch(`https://neevschool.sbs/school/updateProfilePhoto`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ imgUrl }),
+        body: JSON.stringify({ userId: profile?.id,  imgUrl }),
       });
 
       const result = await response.json();

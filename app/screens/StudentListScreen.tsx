@@ -11,11 +11,24 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
+
+const { width } = Dimensions.get('window');
+
+interface Section {
+  id: number;
+  name: string;
+}
+
+interface Class {
+  id: number;
+  name: string;
+}
 
 interface Student {
   id: number;
@@ -29,15 +42,25 @@ interface Student {
   address: string;
   email: string;
   aadhaarNumber: string;
-  section: {
-    id: number;
-    name: string
-  };
-  class: {
-    id: number;
-    name: string;
-  };
+  section: Section;
+  class: Class;
 }
+
+interface RouteParams {
+  classId: string;
+  sectionId: string;
+  className: string;
+  sectionName: string;
+}
+
+const getAvatarColor = (name: string): string => {
+  const colors = [
+    '#4f46e5', '#0891b2', '#4338ca', '#7c3aed', 
+    '#0284c7', '#2563eb', '#4f46e5', '#6366f1'
+  ];
+  const index = name.charCodeAt(0) % colors.length;
+  return colors[index];
+};
 
 const StudentListScreen = () => {
   const router = useRouter();
@@ -301,23 +324,39 @@ const StudentListScreen = () => {
   );
 
   const renderStudent = (student: Student) => (
-    <View key={student.id} style={styles.studentCard}>
+    <View key={student.id} style={[
+      styles.studentCard,
+      { width: width > 768 ? '48%' : '100%' }
+    ]}>
       <View style={styles.studentInfo}>
-        <View style={styles.avatarContainer}>
-          <View style={[styles.avatar, styles.placeholderAvatar]}>
-            <Text style={styles.avatarText}>
-              {student.firstName.charAt(0).toUpperCase()}
-            </Text>
-          </View>
+        <View style={[
+          styles.avatar,
+          { backgroundColor: getAvatarColor(student.firstName) }
+        ]}>
+          <Text style={styles.avatarText}>
+            {student.firstName.charAt(0).toUpperCase()}
+          </Text>
         </View>
         <View style={styles.studentDetails}>
           <Text style={styles.studentName}>
             {student.firstName} {student.lastName}
           </Text>
           <Text style={styles.studentEmail}>{student.email}</Text>
-          <Text style={styles.studentClass}>Class: {student.class.name} Section: {sectionName}</Text>
+          <View style={styles.badgeContainer}>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>Class {student.class.name}</Text>
+            </View>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>Section {sectionName}</Text>
+            </View>
+          </View>
+          <View style={styles.parentInfoContainer}>
+            <FontAwesome name="user" size={12} color="#64748b" />
+            <Text style={styles.parentInfo}>{student.parentName}</Text>
+          </View>
         </View>
       </View>
+
       <View style={styles.actionButtons}>
         <TouchableOpacity
           onPress={() => {
@@ -326,13 +365,15 @@ const StudentListScreen = () => {
           }}
           style={[styles.actionButton, styles.editButton]}
         >
-          <FontAwesome name="edit" size={16} color="#3b82f6" />
+          <FontAwesome name="edit" size={14} color="#4f46e5" />
+          <Text style={[styles.actionButtonText, { color: '#4f46e5' }]}>Edit</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => handleDeleteStudent(student.id)}
           style={[styles.actionButton, styles.deleteButton]}
         >
-          <FontAwesome name="trash" size={16} color="#ef4444" />
+          <FontAwesome name="trash" size={14} color="#ef4444" />
+          <Text style={[styles.actionButtonText, { color: '#ef4444' }]}>Delete</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -341,7 +382,8 @@ const StudentListScreen = () => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3b82f6" />
+        <ActivityIndicator size="large" color="#4f46e5" />
+        <Text style={styles.loadingText}>Loading students...</Text>
       </View>
     );
   }
@@ -362,16 +404,19 @@ const StudentListScreen = () => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollView}>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollViewContent}
+      >
         <View style={styles.studentList}>
           {students.length > 0 ? (
             students.map(renderStudent)
           ) : (
-            <View style={styles.noStudentsContainer}>
-              <FontAwesome name="users" size={48} color="#cbd5e1" />
-              <Text style={styles.noStudentsText}>No students added yet</Text>
-              <Text style={styles.noStudentsSubText}>
-                Tap the Add Student button to add your first student
+            <View style={styles.emptyState}>
+              <FontAwesome name="users" size={64} color="#cbd5e1" />
+              <Text style={styles.emptyStateTitle}>No students yet</Text>
+              <Text style={styles.emptyStateText}>
+                Start by adding your first student to this class
               </Text>
             </View>
           )}
@@ -388,28 +433,29 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   header: {
     padding: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   title: {
-    fontSize: 28,
+    fontSize: width > 768 ? 32 : 24,
     fontWeight: 'bold',
     color: '#1f2937',
   },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#4f46e5',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
@@ -423,82 +469,134 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  studentList: {
+  scrollViewContent: {
     padding: 16,
-    gap: 12,
+  },
+  studentList: {
+    flexDirection: width > 768 ? 'row' : 'column',
+    flexWrap: 'wrap',
+    gap: 16,
+    justifyContent: 'space-between',
   },
   studentCard: {
     backgroundColor: '#ffffff',
     padding: 16,
     borderRadius: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#e2e8f0',
     elevation: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowRadius: 4,
   },
   studentInfo: {
     flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
     gap: 12,
   },
-  avatarContainer: {
+  avatar: {
     width: 48,
     height: 48,
-  },
-  avatar: {
-    width: '100%',
-    height: '100%',
     borderRadius: 24,
-  },
-  placeholderAvatar: {
-    backgroundColor: '#e2e8f0',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#64748b',
+    color: '#ffffff',
   },
   studentDetails: {
+    flex: 1,
     gap: 4,
   },
   studentName: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: width > 768 ? 18 : 16,
+    fontWeight: '600',
     color: '#1f2937',
   },
   studentEmail: {
     fontSize: 14,
     color: '#64748b',
   },
-  studentClass: {
+  badgeContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  badge: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  badgeText: {
+    fontSize: 12,
+    color: '#475569',
+  },
+  parentInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  parentInfo: {
     fontSize: 14,
     color: '#64748b',
   },
   actionButtons: {
     flexDirection: 'row',
+    justifyContent: 'flex-end',
     gap: 8,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
   },
   actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 8,
-    borderRadius: 8,
-    borderWidth: 1,
+    borderRadius: 6,
+    gap: 4,
   },
   editButton: {
-    borderColor: '#3b82f6',
     backgroundColor: '#eff6ff',
   },
   deleteButton: {
-    borderColor: '#ef4444',
     backgroundColor: '#fef2f2',
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#64748b',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#64748b',
+    marginTop: 16,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginTop: 8,
   },
   modalContainer: {
     flex: 1,
@@ -570,23 +668,6 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '500',
-  },
-  noStudentsContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 48,
-    gap: 12,
-  },
-  noStudentsText: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: '#64748b',
-    marginTop: 16,
-  },
-  noStudentsSubText: {
-    fontSize: 14,
-    color: '#94a3b8',
-    textAlign: 'center',
   },
 });
 

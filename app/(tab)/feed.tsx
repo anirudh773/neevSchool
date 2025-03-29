@@ -20,7 +20,7 @@ import { MaterialIcons, FontAwesome, Feather } from "@expo/vector-icons"
 import DateTimePicker from '@react-native-community/datetimepicker'
 import * as SecureStore from 'expo-secure-store'
 import { useRouter } from 'expo-router'
-import { launchImageLibraryAsync, MediaTypeOptions } from 'expo-image-picker'
+import { launchImageLibraryAsync, MediaType, MediaTypeOptions } from 'expo-image-picker'
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 
 interface Event {
@@ -329,12 +329,12 @@ export default function EventListScreen() {
     try {
       const result = await launchImageLibraryAsync({
         mediaTypes: MediaTypeOptions.Images,
-      allowsEditing: true,
+        allowsEditing: true,
         aspect: [4, 3],
         quality: 1,
       });
 
-    if (!result.canceled) {
+      if (!result.canceled) {
         setUploadingImage(true);
         const uploadedUrl = await uploadImageToFirebase(result.assets[0].uri);
         setImageUri(uploadedUrl);

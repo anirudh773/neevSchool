@@ -19,7 +19,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.neevlearn.app",
-      "versionCode": 3,
+      "versionCode": 4,
       "usesCleartextTraffic": true
     },
     "web": {
@@ -58,6 +58,11 @@
       "eas": {
         "projectId": "5f60753c-7b66-4fb8-872c-b6172aea6cc6"
       }
+    },
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
     }
   }
 }

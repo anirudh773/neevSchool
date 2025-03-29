@@ -11,6 +11,7 @@ import {
   StatusBar,
   SafeAreaView,
   Linking,
+  Modal,
 } from 'react-native';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import * as SecureStore from 'expo-secure-store';
@@ -30,6 +31,7 @@ const HomeScreen = () => {
   const [userPermissions, setUserPermissions] = useState<Permission[]>([]);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -84,25 +86,39 @@ const HomeScreen = () => {
     );
   };
 
+  const handleLogout = async () => {
+    setShowProfileMenu(false);
+    
+    Alert.alert(
+      "Logout",
+      "Are you sure you want to logout?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Logout",
+          onPress: async () => {
+            try {
+              // Clear all secure storage keys
+              const keys = ['userToken', 'userData', 'userPermission', 'pushToken', 'teacherClasses', 'schoolClasses'];
+              await Promise.all(keys.map(key => SecureStore.deleteItemAsync(key)));
+              
+              // Navigate to login screen
+              router.replace('/screens/LoginPage');
+            } catch (error) {
+              console.error('Error during logout:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleProfilePress = () => {
-    if (userData) {
-      switch (userData.role) {
-        case 1:
-          router.push('/screens/Admin/Profile');
-          break;
-        case 2:
-          router.push('/screens/Teacher/Profile');
-          break;
-        case 3:
-          router.push('/screens/Student/Profile');
-          break;
-        default:
-          Alert.alert('Error', 'Invalid user role');
-      }
-    } else {
-      Alert.alert('Error', 'Please login again');
-      router.replace('/screens/LoginPage');
-    }
+    setShowProfileMenu(true);
   };
 
   if (loading) {
@@ -126,7 +142,7 @@ const HomeScreen = () => {
           <View style={styles.headerRight}>
             <TouchableOpacity 
               style={styles.profileButton}
-              // onPress={handleProfilePress}
+              onPress={handleProfilePress}
             >
               <FontAwesome name="user-circle" size={35} color="#007AFF" />
             </TouchableOpacity>
@@ -193,6 +209,40 @@ const HomeScreen = () => {
           </View>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Profile Menu Modal */}
+      <Modal
+        visible={showProfileMenu}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowProfileMenu(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowProfileMenu(false)}
+        >
+          <View style={styles.profileMenuContainer}>
+            <TouchableOpacity 
+              style={styles.profileMenuItem}
+              onPress={handleProfilePress}
+            >
+              <FontAwesome name="user" size={20} color="#3F51B5" />
+              <Text style={styles.profileMenuItemText}>View Profile</Text>
+            </TouchableOpacity>
+            
+            <View style={styles.menuDivider} />
+            
+            <TouchableOpacity 
+              style={styles.profileMenuItem}
+              onPress={handleLogout}
+            >
+              <FontAwesome name="sign-out" size={20} color="#FF4081" />
+              <Text style={[styles.profileMenuItemText, {color: '#FF4081'}]}>Logout</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -374,6 +424,41 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
     fontSize: 12,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+  },
+  profileMenuContainer: {
+    width: width * 0.5,
+    marginTop: 70,
+    marginRight: 16,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    overflow: 'hidden',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  profileMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+  },
+  profileMenuItemText: {
+    marginLeft: 12,
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1A237E',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#E0E0E0',
+    marginHorizontal: 10,
   },
 });
 

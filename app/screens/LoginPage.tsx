@@ -10,6 +10,7 @@ import {
   ScrollView,
   Alert,
   Platform,
+  Linking,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
@@ -138,8 +139,9 @@ const styles = StyleSheet.create({
   },
   footerText: {
     marginTop: 20,
-    color: 'gray',
+    color: '#007AFF',
     fontSize: 14,
+    textDecorationLine: 'underline',
   },
   disabledButton: {
     opacity: 0.7,
@@ -216,31 +218,6 @@ const LoginPage = () => {
     }
   };
 
-  // Set up notification listeners
-  useEffect(() => {
-    // Request notification permissions
-    Notifications.requestPermissionsAsync();
-
-    // Set up notification listeners
-    const foregroundSubscription = Notifications.addNotificationReceivedListener(notification => {
-      console.log('Received foreground notification:', notification);
-    });
-
-    const backgroundSubscription = Notifications.addNotificationResponseReceivedListener(response => {
-      console.log('Background notification tapped:', response);
-      const screen = response.notification.request.content.data.screen;
-      if (screen) {
-        router.push(screen);
-      }
-    });
-
-    return () => {
-      // Clean up listeners
-      foregroundSubscription.remove();
-      backgroundSubscription.remove();
-    };
-  }, []);
-
   const handleLogin = async () => {
     if (!userId || !password) {
       Alert.alert('Error', 'Please enter both User ID and Password.');
@@ -267,8 +244,8 @@ const LoginPage = () => {
       // Handle non-JSON response safely
       const data = await response.json().catch(() => ({}));
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Login failed. Please try again.');
+      if(data && !data.token){
+        throw new Error('Your Login userid or password is incorrect');
       }
 
       // Store tokens and user data securely
@@ -304,6 +281,26 @@ const LoginPage = () => {
 
   const handlePasswordVisibility = () => {
     setShowPassword(!showPassword);
+  };
+
+  const handleSupportCall = () => {
+    Alert.alert(
+      "Contact Support",
+      "Would you like to call our support team?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Call",
+          onPress: () => {
+            const phoneNumber = '7376623107';
+            Linking.openURL(`tel:${phoneNumber}`);
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -354,7 +351,9 @@ const LoginPage = () => {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.footerText}>Unable to login?</Text>
+        <TouchableOpacity onPress={handleSupportCall}>
+          <Text style={styles.footerText}>Unable to login?</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );

@@ -150,48 +150,57 @@ const ClassSelectionModal: React.FC<ClassSelectionModalProps> = ({
     >
         <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Select Class & Section</Text>
-                <ScrollView>
-                    {classes.map((classItem) => (
-                        <View key={classItem.id}>
-                            {classItem.sections.length > 0 ? (
-                                classItem.sections.map((section: Section) => (
-                                    <TouchableOpacity
-                                        key={`${classItem.id}-${section.id}`}
-                                        style={[
-                                            styles.classOption,
-                                            editingTeacher?.sectionId === section.id &&
-                                            styles.selectedClassOption
-                                        ]}
-                                        onPress={() => {
-                                            onSelect(classItem.id, section.id);
-                                        }}
-                                    >
-                                        <Text style={[
-                                            styles.classOptionText,
-                                            editingTeacher?.sectionId === section.id &&
-                                            styles.selectedClassOptionText
-                                        ]}>
-                                            {formatClassSection(classItem.name, section.name)}
+                <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>Select Class & Section</Text>
+                    <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                        <FontAwesome name="times" size={20} color="#666" />
+                    </TouchableOpacity>
+                </View>
+                <View style={styles.modalBody}>
+                    <ScrollView 
+                        style={styles.modalScrollView}
+                        showsVerticalScrollIndicator={true}
+                        contentContainerStyle={styles.modalScrollContent}
+                    >
+                        {classes.map((classItem) => (
+                            <View key={classItem.id} style={styles.classGroup}>
+                                <Text style={styles.classGroupTitle}>Class {classItem.name}</Text>
+                                {classItem.sections && classItem.sections.length > 0 ? (
+                                    classItem.sections.map((section: Section) => (
+                                        <TouchableOpacity
+                                            key={`${classItem.id}-${section.id}`}
+                                            style={[
+                                                styles.classOption,
+                                                editingTeacher?.sectionId === section.id &&
+                                                styles.selectedClassOption
+                                            ]}
+                                            onPress={() => {
+                                                onSelect(classItem.id, section.id);
+                                            }}
+                                        >
+                                            <View style={styles.classOptionContent}>
+                                                <FontAwesome name="graduation-cap" size={16} color="#666" />
+                                                <Text style={[
+                                                    styles.classOptionText,
+                                                    editingTeacher?.sectionId === section.id &&
+                                                    styles.selectedClassOptionText
+                                                ]}>
+                                                    Section {section.name}
+                                                </Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    ))
+                                ) : (
+                                    <View style={styles.noSectionsContainer}>
+                                        <Text style={styles.noSectionsText}>
+                                            No sections available
                                         </Text>
-                                    </TouchableOpacity>
-                                ))
-                            ) : (
-                                <View style={styles.noSectionsContainer}>
-                                    <Text style={styles.noSectionsText}>
-                                        {classItem.name} - No sections available
-                                    </Text>
-                                </View>
-                            )}
-                        </View>
-                    ))}
-                </ScrollView>
-                <TouchableOpacity
-                    style={[styles.modalButton, styles.cancelButton]}
-                    onPress={onClose}
-                >
-                    <Text style={styles.buttonText}>Cancel</Text>
-                </TouchableOpacity>
+                                    </View>
+                                )}
+                            </View>
+                        ))}
+                    </ScrollView>
+                </View>
             </View>
         </View>
     </Modal>
@@ -900,81 +909,69 @@ const styles = StyleSheet.create({
     modalContent: {
         backgroundColor: '#fff',
         borderRadius: 12,
-        padding: 16,
-        maxHeight: '90%',
+        height: '90%',
+        width: '100%',
+        overflow: 'hidden',
     },
-    modalTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        marginBottom: 16,
-        textAlign: 'center',
-    },
-    modalInput: {
-        marginBottom: 16,
-    },
-    modalButtons: {
+    modalHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        gap: 16,
-    },
-    modalButton: {
-        flex: 1,
-        padding: 12,
-        borderRadius: 8,
         alignItems: 'center',
-    },
-    cancelButton: {
-        backgroundColor: '#FF3B30',
-    },
-    saveButton: {
-        backgroundColor: '#007AFF',
-    },
-    buttonText: {
-        color: '#fff',
-        fontWeight: 'bold',
-    },
-    noTeachers: {
-        textAlign: 'center',
-        color: '#666',
-        marginTop: 32,
-    },
-    classSelectButton: {
-        borderWidth: 1,
-        borderColor: '#ccc',
-        borderRadius: 4,
-        padding: 12,
-        marginBottom: 16,
-    },
-    classSelectLabel: {
-        fontSize: 12,
-        color: '#666',
-        marginBottom: 4,
-    },
-    classSelectValue: {
-        fontSize: 16,
-        color: '#000',
-    },
-    classOption: {
         padding: 16,
         borderBottomWidth: 1,
-        borderBottomColor: '#eee',
+        borderBottomColor: '#E0E0E0',
+        backgroundColor: '#fff',
+    },
+    modalBody: {
+        flex: 1,
+        overflow: 'hidden',
+    },
+    modalScrollView: {
+        flex: 1,
+    },
+    modalScrollContent: {
+        padding: 16,
+        paddingBottom: 32,
+    },
+    classGroup: {
+        marginBottom: 24,
+    },
+    classGroupTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#1A237E',
+        marginBottom: 12,
+        paddingLeft: 8,
+    },
+    classOption: {
+        padding: 12,
+        borderRadius: 8,
+        marginBottom: 8,
+        backgroundColor: '#F8FAFF',
+    },
+    selectedClassOption: {
+        backgroundColor: '#E3F2FD',
+        borderColor: '#2196F3',
+        borderWidth: 1,
+    },
+    classOptionContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
     },
     classOptionText: {
         fontSize: 16,
-        color: '#000',
-    },
-    selectedClassOption: {
-        backgroundColor: '#e3f2fd',
+        color: '#333',
     },
     selectedClassOptionText: {
-        color: '#1976d2',
-        fontWeight: 'bold',
+        color: '#2196F3',
+        fontWeight: '600',
     },
     noSectionsContainer: {
-        padding: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-        backgroundColor: '#f5f5f5',
+        padding: 12,
+        backgroundColor: '#F5F5F5',
+        borderRadius: 8,
+        marginBottom: 8,
     },
     noSectionsText: {
         color: '#666',
@@ -1052,21 +1049,10 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.25,
         shadowRadius: 8,
     },
-    modalHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingBottom: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E0E0E0',
-    },
     editModalTitle: {
         fontSize: Math.min(20, width * 0.05),
         fontWeight: 'bold',
         color: '#1A237E',
-    },
-    closeButton: {
-        padding: 8,
     },
     editFormContainer: {
         marginTop: 16,

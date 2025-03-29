@@ -1,23 +1,79 @@
-import React, { useEffect } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  Image,
+  Dimensions,
+  Alert,
+} from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
 
-const LoadingScreen: React.FC = () => {
+const { width } = Dimensions.get('window');
+
+const LoadingScreen = () => {
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // List of required secure store keys
+  const requiredKeys = ['userToken', 'userData', 'userPermission'];
 
   useEffect(() => {
-    // Set a 2-second delay before navigating to the login page
-    const timer = setTimeout(() => {
-      router.replace('/screens/LoginPage'); // Navigate to the Login Page
-    }, 2000);
+    const checkAuth = async () => {
+      try {
+        // Wait for 1 second first
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Check if all required keys are present
+        const keyResults = await Promise.all(
+          requiredKeys.map(async (key) => {
+            const value = await SecureStore.getItemAsync(key);
+            return { key, exists: value !== null };
+          })
+        );
+        
+        // Check if any required key is missing
+        const missingKeys = keyResults.filter(result => !result.exists);
+        
+        if (missingKeys.length > 0) {
+          console.log('Missing required keys:', missingKeys.map(k => k.key).join(', '));
+          // Navigate to login screen if any key is missing
+          router.replace('/screens/LoginPage');
+        } else {
+          // All required keys exist, navigate to main app
+          router.replace('/(tab)');
+        }
+      } catch (error) {
+        console.error('Error checking authentication:', error);
+        Alert.alert(
+          'Error',
+          'Something went wrong while checking your login status. Please try again.'
+        );
+        router.replace('/screens/LoginPage');
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-    // Cleanup the timer when the component is unmounted
-    return () => clearTimeout(timer);
-  }, [router]);
+    checkAuth();
+  }, []);
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color="#0000ff" />
+      <Image
+        source={require('../../assets/images/image.png')}
+        style={styles.logo}
+        resizeMode="contain"
+      />
+      <Text style={styles.title}>Neev Learn Private Limited</Text>
+      <Text style={styles.subtitle}>Loading your experience...</Text>
+      <ActivityIndicator 
+        size="large" 
+        color="#007AFF" 
+        style={styles.loader} 
+      />
     </View>
   );
 };
@@ -27,7 +83,30 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F8FAFF',
+    padding: 20,
+  },
+  logo: {
+    width: width * 0.4,
+    height: width * 0.4,
+    marginBottom: 20,
+    borderRadius: 20,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1A237E',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#5C6BC0',
+    textAlign: 'center',
+    marginBottom: 30,
+  },
+  loader: {
+    marginTop: 20,
   },
 });
 
