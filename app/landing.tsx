@@ -213,7 +213,7 @@ const Landing: React.FC = () => {
           style={styles.logo}
           defaultSource={require('../assets/images/image.png')} // Fallback for web
         />
-        <Text style={styles.title}>Welcome to Neev Learn Pvt. Ltd.</Text>
+        <Text style={styles.title}>Welcome to St. Thomas mission school</Text>
         <AnimationComponent />
       </View>
     </BackgroundComponent>

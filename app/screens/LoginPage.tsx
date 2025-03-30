@@ -209,7 +209,7 @@ const LoginPage = () => {
       await Notifications.scheduleNotificationAsync({
         content: {
           title: "Login Successful!",
-          body: "Welcome to Neev Learn Private Limited",
+          body: "Welcome to St. Thomas mission school",
           data: { screen: 'Home' },
         },
         trigger: null, // Show immediately
@@ -237,7 +237,6 @@ const LoginPage = () => {
         body: JSON.stringify({ 
           userId, 
           password
-          // pushToken: pushToken || null // Include push token if available
         }),
       });
 
@@ -246,6 +245,11 @@ const LoginPage = () => {
 
       if(data && !data.token){
         throw new Error('Your Login userid or password is incorrect');
+      }
+
+      // Check if user is associated with the correct school
+      if (data.userInfo?.schoolId !== 1) {
+        throw new Error('You are not associated with this school. Please contact school.');
       }
 
       // Store tokens and user data securely
@@ -311,8 +315,8 @@ const LoginPage = () => {
             source={require('../../assets/images/image.png')}
             style={styles.logo}
           />
-          <Text style={styles.companyName}>Neev Learn Private Limited</Text>
-          <Text style={styles.location}>Gurugram</Text>
+          <Text style={styles.companyName}>St. Thomas mission school</Text>
+          <Text style={styles.location}>Jaunpur</Text>
         </View>
 
         <View style={styles.inputContainer}>
