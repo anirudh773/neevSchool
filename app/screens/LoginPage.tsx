@@ -267,8 +267,8 @@ const LoginPage = () => {
 
       // Role-specific storage logic
       if (data.userInfo?.role === 2) {
-        await SecureStore.setItemAsync('teacherClasses', JSON.stringify(data.teacherClasses));
-      } else if ([1, 2, 4].includes(data.userInfo?.role)) {
+        await SecureStore.setItemAsync('schoolClasses', JSON.stringify(data.teacherClasses));
+      } else if ([1, 3, 4].includes(data.userInfo?.role)) {
         await SecureStore.setItemAsync('schoolClasses', JSON.stringify(data.classes));
       }
 

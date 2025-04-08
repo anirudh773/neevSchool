@@ -146,7 +146,7 @@ const TeacherHomeworkManager: React.FC = () => {
 
       const { role } = JSON.parse(userData);
       // Get classes based on role
-      const classesKey = role === 2 ? 'teacherClasses' : 'schoolClasses';
+      const classesKey = role === 2 ? 'schoolClasses' : 'schoolClasses';
       const classesData = await SecureStore.getItemAsync(classesKey);
 
       if (classesData) {
