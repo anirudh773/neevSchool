@@ -12,6 +12,8 @@ import {
   SafeAreaView,
   Linking,
   Modal,
+  Animated,
+  Image,
 } from 'react-native';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import * as SecureStore from 'expo-secure-store';
@@ -33,9 +35,25 @@ const HomeScreen = () => {
   const [loading, setLoading] = useState(true);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const router = useRouter();
+  const [fadeAnim] = useState(new Animated.Value(0));
+  const [scaleAnim] = useState(new Animated.Value(0.3));
 
   useEffect(() => {
     loadUserData();
+    // Start logo animation
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 4,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, []);
 
   const loadUserData = async () => {
@@ -133,20 +151,33 @@ const HomeScreen = () => {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F5F5" />
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        {/* Header Section */}
+        {/* Header Section with Logo */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.welcomeText}>Welcome back,</Text>
-            <Text style={styles.userIdText}>{userData?.name || userData?.userId}</Text>
+          <Animated.View
+            style={[
+              styles.logoContainer,
+              {
+                opacity: fadeAnim,
+                transform: [{ scale: scaleAnim }],
+              },
+            ]}
+          >
+            <Image
+              source={require('../../assets/images/image.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </Animated.View>
+          <View style={styles.headerContent}>
+            <Text style={styles.welcomeText}>Welcome,</Text>
+            <Text style={styles.userIdText} numberOfLines={1}>{userData?.name || userData?.userId}</Text>
           </View>
-          <View style={styles.headerRight}>
-            <TouchableOpacity 
-              style={styles.profileButton}
-              onPress={handleProfilePress}
-            >
-              <FontAwesome name="user-circle" size={35} color="#007AFF" />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity 
+            style={styles.profileButton}
+            onPress={handleProfilePress}
+          >
+            <FontAwesome name="user-circle" size={17} color="#007AFF" />
+          </TouchableOpacity>
         </View>
 
         {/* Features Grid */}
@@ -264,27 +295,61 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: 16,
     paddingHorizontal: 16,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
-  headerRight: {
-    flexDirection: 'row',
+  logoContainer: {
+    width: 60,
+    height: 60,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 3,
+  },
+  logo: {
+    width: '80%',
+    height: '80%',
+  },
+  headerContent: {
+    flex: 1,
+    marginLeft: 12,
+    marginRight: 8,
   },
   welcomeText: {
-    fontSize: Math.min(16, width * 0.04),
+    fontSize: 14,
     color: '#5C6BC0',
     fontWeight: '500',
   },
   userIdText: {
-    fontSize: Math.min(24, width * 0.06),
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#1A237E',
-    marginTop: 4,
-    textTransform: 'capitalize',
+    marginTop: 2,
+  },
+  schoolName: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
   },
   profileButton: {
     padding: 8,
