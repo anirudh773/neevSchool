@@ -1,4 +1,4 @@
-import React, { useState,useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,7 @@ interface Month {
   amount: string;
   status: 'PENDING' | 'PAID';
   dueDate?: string;
+  classFeeId?: number; // Added classFeeId property
 }
 interface Student {
   id: number;
@@ -100,58 +101,57 @@ const SubmitPaymentScreen: React.FC = () => {
     remarks: '',
   });
 
-    // Parse student data only once when component mounts
-    useEffect(() => {
-      if (params.student && typeof params.student === 'string') {
-        try {
-          const parsedStudent = JSON.parse(params.student);
-          setStudent(parsedStudent);
-          // setToken()
-        } catch (error) {
-          console.error('Error parsing student data:', error);
-        }
+  // Parse student data only once when component mounts
+  useEffect(() => {
+    if (params.student && typeof params.student === 'string') {
+      try {
+        const parsedStudent = JSON.parse(params.student as string);
+        setStudent(parsedStudent);
+        // setToken()
+      } catch (error) {
+        console.error('Error parsing student data:', error);
       }
-    }, []); // Empty dependency array as params won't change
+    }
+  }, []); // Empty dependency array as params won't change
 
   // Fetch student fees data
-
-    const fetchStudentFees = useCallback(async () => {
-      if (!student?.id) return;
-      try {
-        setLoading(true);
-        const token = await SecureStore.getItemAsync('userToken');
-        const response = await fetch(
-          `https://neevschool.sbs/school/student-fees?student_id=${student.id}&academic_year_id=1`,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'authorization': `Bearer ${token}`
-            }
+  const fetchStudentFees = useCallback(async () => {
+    if (!student?.id) return;
+    try {
+      setLoading(true);
+      const token = await SecureStore.getItemAsync('userToken');
+      const response = await fetch(
+        `https://neevschool.sbs/school/student-fees?student_id=${student.id}&academic_year_id=1`,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'authorization': `Bearer ${token}`
           }
-        );
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch student fees');
         }
+      );
 
-        const result = await response.json();
-        if (result.status === 'success') {
-          setStudentFees(result.data.data);
-        } else {
-          throw new Error(result.message || 'Failed to fetch student fees');
-        }
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
+      if (!response.ok) {
+        throw new Error('Failed to fetch student fees');
       }
-    }, [student?.id]);
 
-    useEffect(() => {
-      if (student?.id) {
-        fetchStudentFees();
+      const result = await response.json();
+      if (result.status === 'success') {
+        setStudentFees(result.data.data);
+      } else {
+        throw new Error(result.message || 'Failed to fetch student fees');
       }
-    }, [student?.id, fetchStudentFees]);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [student?.id]);
+
+  useEffect(() => {
+    if (student?.id) {
+      fetchStudentFees();
+    }
+  }, [student?.id, fetchStudentFees]);
 
   // Handle fee selection
   const handleFeeSelect = (feeTypeId: number, month: string | null = null) => {
@@ -205,36 +205,110 @@ const SubmitPaymentScreen: React.FC = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  // Submit payment
-  const handleSubmit = async () => {
-    if (selectedFees.size === 0) {
-      Alert.alert('Error', 'Please select at least one fee to pay');
-      return;
-    }
+// Submit payment
+const handleSubmit = async () => {
+  if (selectedFees.size === 0) {
+    Alert.alert('Error', 'Please select at least one fee to pay');
+    return;
+  }
 
-    if (!formData.receiptNumber) {
-      Alert.alert('Error', 'Please enter receipt number');
-      return;
-    }
+  if (!formData.receiptNumber) {
+    Alert.alert('Error', 'Please enter receipt number');
+    return;
+  }
 
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
+    
+    // Month name to number mapping
+    const monthMap: Record<string, number> = {
+      'January': 1, 'February': 2, 'March': 3, 'April': 4,
+      'May': 5, 'June': 6, 'July': 7, 'August': 8,
+      'September': 9, 'October': 10, 'November': 11, 'December': 12
+    };
+    
+    // Prepare submissions array from selected fees
+    const submissions = [];
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    for (const feeKey of selectedFees) {
+      const parts = feeKey.split('_');
+      const feeTypeId = parseInt(parts[0]);
+      const month = parts.length > 1 ? parts[1] : monthNames[new Date().getMonth()]
       
-      // Mock submission - replace with actual API call
-      setTimeout(() => {
-        Alert.alert(
-          'Success',
-          'Payment recorded successfully',
-          [{ text: 'OK', onPress: () => router.back() }]
-        );
-        setLoading(false);
-      }, 1500);
+      // Find the corresponding fee type with this ID
+      const feeType = studentFees?.feeTypes.find(f => f.id === feeTypeId);
       
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to submit payment');
-      setLoading(false);
+      if (feeType) {
+        // console.log(feeType.frequency, "dsdsdsdsd============================================")
+          // For monthly fees
+          if(feeType.frequency == 'Monthly') {
+            const monthData = feeType.months.find(m => m.month === month);
+            console.log(monthData, "dsdsdsdsd============================================")
+            if (monthData) {
+              // Use the classFeeId from the monthData instead of the feeTypeId
+              submissions.push({
+                classFeeId: monthData.classFeeId, // Use the specific classFeeId from monthData
+                amount: parseFloat(monthData.amount),
+                month: monthMap[month] // Convert month name to number
+              });
+            }
+          } else {
+            const monthData = feeType.months[0];
+             // Use the classFeeId from the monthData instead of the feeTypeId
+             submissions.push({
+              classFeeId: monthData.classFeeId, // Use the specific classFeeId from monthData
+              amount: monthData.amount,
+              month: monthMap[month] // Convert month name to number
+            });
+          }
+        
+      }
     }
-  };
+    
+    // Get token from secure store
+    const token = await SecureStore.getItemAsync('userToken');
+    
+    // Prepare payment data
+    const paymentData = {
+      studentId: student?.id,
+      academicYearId: 1,
+      fees: submissions,
+      trxId: formData.receiptNumber,
+      totalAmounAtThatTrx: `Payment for ${formData.paymentDate.toLocaleDateString()} - ₹${selectedAmount.toLocaleString()}`
+    };
+    
+    // Make API call
+    const response = await fetch('https://neevschool.sbs/school/submitFeePayment', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(paymentData)
+    });
+    
+    const result = await response.json();
+    console.log(result)
+    
+    if (result.success && result) {
+      Alert.alert(
+        'Success',
+        'Payment recorded successfully',
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
+    } else {
+      throw new Error(result.message || 'Failed to submit payment');
+    }
+  } catch (err: any) {
+    console.log(err);
+    Alert.alert('Error', err.message || 'Failed to submit payment');
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Helper function to format date
   const formatDate = (dateString?: string): string => {
@@ -248,7 +322,7 @@ const SubmitPaymentScreen: React.FC = () => {
     });
   };
 
-  // Render monthly fee item
+  // Render monthly fee item - Modified to allow selection of future months
   const renderMonthlyFeeItem = (feeType: FeeType) => {
     return (
       <View key={`fee-type-${feeType.id}`} style={styles.feeTypeContainer}>
@@ -258,13 +332,14 @@ const SubmitPaymentScreen: React.FC = () => {
           </View>
           <View style={styles.feeTypeInfo}>
             <Text style={styles.feeTypeName}>{feeType.name}</Text>
-            <Text style={styles.feeTypeFrequency}>{feeType.frequency} • ₹{parseFloat(feeType.totalAmount).toLocaleString()}/year</Text>
+            <Text style={styles.feeTypeFrequency}>{feeType.frequency} • ₹{parseFloat(feeType.totalAmount).toLocaleString()}</Text>
           </View>
         </View>
         
         <View style={styles.monthsContainer}>
           {feeType.months.map((monthData, index) => {
-            const isMonthSelectable = monthData.status === "PENDING";
+            // Modified: Allow selection of all months, regardless of status
+            const isMonthSelectable = monthData.status === "PENDING" || monthData.status !== "PAID";
             const key = `${feeType.id}_${monthData.month}`;
             const isSelected = selectedFees.has(key);
             
@@ -523,7 +598,7 @@ const SubmitPaymentScreen: React.FC = () => {
               <View style={styles.pickerContainer}>
                 <Picker
                   selectedValue={formData.paymentMode}
-                  onValueChange={(value) => handleFormChange('paymentMode', value)}
+                  onValueChange={(value) => handleFormChange('paymentMode', value as string)}
                   style={styles.picker}
                 >
                   {paymentModes.map(mode => (
@@ -1134,7 +1209,5 @@ const styles = StyleSheet.create<Style>({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
-  }});
-  
-
-export default SubmitPaymentScreen;
+  }
+});
