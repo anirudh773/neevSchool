@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState,useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,17 +10,22 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
-  Dimensions,
+  ViewStyle,
+  TextStyle,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import * as SecureStore from 'expo-secure-store';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as SecureStore from 'expo-secure-store';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// Types
+// Define TypeScript interfaces
+interface Month {
+  month: string;
+  amount: string;
+  status: 'PENDING' | 'PAID';
+  dueDate?: string;
+}
 interface Student {
   id: number;
   name: string;
@@ -30,14 +35,40 @@ interface Student {
   sectionName: string;
 }
 
-interface FeeStructure {
+interface FeeType {
   id: number;
-  feeTypeName: string;
-  amount: number;
-  dueDate: string;
+  name: string;
+  frequency: 'Monthly' | 'Yearly' | 'One Time';
+  totalAmount: string;
+  status?: 'PENDING' | 'PAID';
+  months: Month[];
 }
 
-interface PaymentFormData {
+interface StudentDetails {
+  name: string;
+  class: string;
+  section: string;
+}
+
+interface AcademicYear {
+  id: number;
+  name: string;
+}
+
+interface FeeSummary {
+  totalFees: string;
+  totalPaid: string;
+  totalBalance: string;
+}
+
+interface StudentFeesData {
+  studentDetails: StudentDetails;
+  academicYear: AcademicYear;
+  feeTypes: FeeType[];
+  summary: FeeSummary;
+}
+
+interface FormData {
   amount: string;
   paymentMode: string;
   paymentDate: Date;
@@ -45,469 +76,330 @@ interface PaymentFormData {
   remarks: string;
 }
 
-interface CreateFeeResponse {
-  success: boolean;
-  message: string;
-  data: {
-    id: number;
-    class_id: number;
-    school_id: number;
-    fee_type_id: number;
-    amount: string;
-    created_at: string;
-    updated_at: string;
-  };
+interface PaymentMode {
+  id: string;
+  name: string;
 }
 
-interface FeeCreationData {
-  classId: number;
-  schoolId: number;
-  feeTypeId: number;
-  amount: number;
-}
-
-// Add new interfaces for pending fees
-interface PendingFee {
-  classFeeId: number;
-  feeTypeId: number;
-  feeTypeName: string;
-  amount: string;
-  frequency: string;
-  month?: number;
-  year: number;
-}
-
-interface PendingFeesResponse {
-  success: boolean;
-  data: {
-    currentMonthFees: PendingFee[];
-    otherPendingFees: PendingFee[];
-    totalCurrentAmount: number;
-    totalPendingAmount: number;
-  };
-}
-
-// Dummy data
-const dummyFeeStructures: FeeStructure[] = [
-  { id: 1, feeTypeName: 'Tuition Fee', amount: 5000, dueDate: '2024-04-10' },
-  { id: 2, feeTypeName: 'Development Fee', amount: 2000, dueDate: '2024-04-10' },
-  { id: 3, feeTypeName: 'Library Fee', amount: 1000, dueDate: '2024-04-10' },
-];
-
-const paymentModes = [
-  { id: 'cash', name: 'Cash' },
-  { id: 'upi', name: 'UPI' },
-  { id: 'bank_transfer', name: 'Bank Transfer' },
-];
-
-const SubmitPaymentScreen = () => {
+// Component definition
+const SubmitPaymentScreen: React.FC = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   const [student, setStudent] = useState<Student | null>(null);
-  const [feeStructures] = useState<FeeStructure[]>(dummyFeeStructures);
-  const [pendingFees, setPendingFees] = useState<PendingFeesResponse['data'] | null>(null);
+  const [studentFees, setStudentFees] = useState<StudentFeesData | null>(null);
   const [selectedFees, setSelectedFees] = useState<Set<string>>(new Set());
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showFeeCreationForm, setShowFeeCreationForm] = useState(false);
-  const [creatingFee, setCreatingFee] = useState(false);
-  const [feeCreationData, setFeeCreationData] = useState<FeeCreationData>({
-    classId: 0,
-    schoolId: 0,
-    feeTypeId: 0,
-    amount: 0
-  });
-  
-  // Memoize the initial form data
-  const initialFormData = useCallback(() => ({
+  const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
+  const [token, setToken] = useState<string>('');
+  const [formData, setFormData] = useState<FormData>({
     amount: '',
     paymentMode: 'cash',
     paymentDate: new Date(),
     receiptNumber: '',
     remarks: '',
-  }), []);
-  
-  const [formData, setFormData] = useState<PaymentFormData>(initialFormData());
+  });
 
-  // Memoize total fees calculation
-  const totalFees = useMemo(() => 
-    feeStructures.reduce((sum, fee) => sum + fee.amount, 0),
-    [feeStructures]
-  );
-  
-  // Parse student data only once when component mounts
-  useEffect(() => {
-    if (params.student && typeof params.student === 'string') {
-      try {
-        const parsedStudent = JSON.parse(params.student);
-        setStudent(parsedStudent);
-      } catch (error) {
-        console.error('Error parsing student data:', error);
-      }
-    }
-  }, []); // Empty dependency array as params won't change
-
-  // Fetch pending fees
-  const fetchPendingFees = useCallback(async () => {
-    if (!student?.id) return;
-
-    try {
-      setLoading(true);
-      const response = await fetch(
-        `https://neevschool.sbs/school/getStudentPendingFees/${student.id}`,
-        {
-          headers: {
-            'Content-Type': 'application/json'
-          }
+    // Parse student data only once when component mounts
+    useEffect(() => {
+      if (params.student && typeof params.student === 'string') {
+        try {
+          const parsedStudent = JSON.parse(params.student);
+          setStudent(parsedStudent);
+          // setToken()
+        } catch (error) {
+          console.error('Error parsing student data:', error);
         }
-      );
-
-      const result: PendingFeesResponse = await response.json();
-      if (result.success) {
-        setPendingFees(result.data);
-      } else {
-        throw new Error(result.message || 'Failed to fetch pending fees');
       }
-    } catch (error) {
-      // Alert.alert('Error', error instanceof Error ? error.message : 'Failed to fetch pending fees');
-    } finally {
-      setLoading(false);
-    }
-  }, [student?.id]);
+    }, []); // Empty dependency array as params won't change
 
-  // Effect to fetch pending fees when student is loaded
-  useEffect(() => {
-    if (student?.id) {
-      fetchPendingFees();
-    }
-  }, [student?.id, fetchPendingFees]);
+  // Fetch student fees data
 
-  // Calculate selected amount
-  const selectedAmount = useMemo(() => {
-    if (!pendingFees) return 0;
-    
-    const allFees = [...pendingFees.currentMonthFees, ...pendingFees.otherPendingFees];
-    return allFees
-      .filter(fee => {
-        const key = fee.feeTypeName.toLowerCase().includes('tuition') 
-          ? `${fee.classFeeId}_${fee.month}`
-          : `${fee.classFeeId}`;
-        return selectedFees.has(key);
-      })
-      .reduce((sum, fee) => sum + parseFloat(fee.amount), 0);
-  }, [pendingFees, selectedFees]);
+    const fetchStudentFees = useCallback(async () => {
+      if (!student?.id) return;
+      try {
+        setLoading(true);
+        const token = await SecureStore.getItemAsync('userToken');
+        const response = await fetch(
+          `https://neevschool.sbs/school/student-fees?student_id=${student.id}&academic_year_id=1`,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'authorization': `Bearer ${token}`
+            }
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch student fees');
+        }
+
+        const result = await response.json();
+        if (result.status === 'success') {
+          setStudentFees(result.data.data);
+        } else {
+          throw new Error(result.message || 'Failed to fetch student fees');
+        }
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }, [student?.id]);
+
+    useEffect(() => {
+      if (student?.id) {
+        fetchStudentFees();
+      }
+    }, [student?.id, fetchStudentFees]);
 
   // Handle fee selection
-  const handleFeeSelect = useCallback((classFeeId: number, month?: number) => {
-    if (!pendingFees) return;
-    
-    const allFees = [...pendingFees.currentMonthFees, ...pendingFees.otherPendingFees];
-    const selectedFee = allFees.find(fee => fee.classFeeId === classFeeId);
-    
-    if (!selectedFee) return;
-
+  const handleFeeSelect = (feeTypeId: number, month: string | null = null) => {
     setSelectedFees(prev => {
       const newSet = new Set(prev);
-      const isTuitionFee = selectedFee.feeTypeName.toLowerCase().includes('tuition');
-      
-      // Create a unique key based on whether it's a tuition fee
-      const key = isTuitionFee && month 
-        ? `${classFeeId}_${month}`
-        : `${classFeeId}`;
+      const key = month ? `${feeTypeId}_${month}` : `${feeTypeId}`;
       
       if (prev.has(key)) {
-        // If already selected, remove it
         newSet.delete(key);
       } else {
-        if (isTuitionFee) {
-          // For tuition fees, first remove any other tuition fee from the same month
-          const tuitionKeysToRemove = Array.from(prev).filter(existingKey => {
-            const [, existingMonth] = existingKey.split('_');
-            return existingKey.includes('_') && existingMonth === month?.toString();
-          });
-          tuitionKeysToRemove.forEach(keyToRemove => newSet.delete(keyToRemove));
-        }
-        // Add the new selection
         newSet.add(key);
       }
       
       return newSet;
     });
-  }, [pendingFees]);
+  };
 
-  // Render fee item
-  const renderFeeItem = useCallback((fee: PendingFee, index: number, type: 'current' | 'pending') => {
-    const isTuitionFee = fee.feeTypeName.toLowerCase().includes('tuition');
-    const key = isTuitionFee && fee.month 
-      ? `${fee.classFeeId}_${fee.month}`
-      : `${fee.classFeeId}`;
-    const isSelected = selectedFees.has(key);
-    const monthText = fee.month ? new Date(2000, fee.month - 1).toLocaleString('default', { month: 'long' }) : '';
-    const uniqueKey = `${type}-${fee.classFeeId}-${index}`;
+  // Calculate selected amount
+  const selectedAmount = useMemo(() => {
+    if (!studentFees) return 0;
     
-    return (
-      <TouchableOpacity
-        key={uniqueKey}
-        style={[
-          styles.feeItem,
-          isSelected && styles.selectedFeeItem,
-          { borderLeftWidth: 4, borderLeftColor: isSelected ? '#4caf50' : '#512da8' }
-        ]}
-        onPress={() => handleFeeSelect(fee.classFeeId, fee.month)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.feeItemHeader}>
-          <View style={styles.feeIconContainer}>
-            <MaterialCommunityIcons 
-              name="cash-multiple" 
-              size={24} 
-              color={isSelected ? '#4caf50' : '#512da8'} 
-            />
-          </View>
-          <View style={styles.feeTypeContainer}>
-            <View style={styles.feeTypeRow}>
-              <Text style={[styles.feeType, isSelected && styles.selectedText]}>
-                {fee.feeTypeName}
-              </Text>
-              {isTuitionFee && monthText && (
-                <View style={[styles.monthBadge, isSelected && styles.selectedMonthBadge]}>
-                  <Text style={[styles.monthBadgeText, isSelected && styles.selectedMonthBadgeText]}>
-                    {monthText}
-                  </Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.feePeriod}>
-              <MaterialCommunityIcons 
-                name="calendar-clock" 
-                size={14} 
-                color="#666" 
-                style={styles.periodIcon}
-              />
-              {' '}{fee.frequency}{!isTuitionFee && monthText ? ` - ${monthText}` : ''} {fee.year}
-            </Text>
-          </View>
-          <View style={styles.feeAmountContainer}>
-            <Text style={[styles.feeAmount, isSelected && styles.selectedText]}>
-              ₹{parseFloat(fee.amount).toLocaleString()}
-            </Text>
-            <View style={[styles.checkCircle, isSelected && styles.selectedCheckCircle]}>
-              <MaterialIcons 
-                name={isSelected ? "check-circle" : "radio-button-unchecked"} 
-                size={24} 
-                color={isSelected ? "#4caf50" : "#ddd"} 
-              />
-            </View>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  }, [selectedFees, handleFeeSelect]);
+    let total = 0;
+    studentFees.feeTypes.forEach(feeType => {
+      if (feeType.frequency === "Monthly") {
+        feeType.months.forEach(monthData => {
+          const key = `${feeType.id}_${monthData.month}`;
+          if (selectedFees.has(key)) {
+            total += parseFloat(monthData.amount);
+          }
+        });
+      } else {
+        if (selectedFees.has(`${feeType.id}`)) {
+          total += parseFloat(feeType.totalAmount);
+        }
+      }
+    });
+    
+    return total;
+  }, [studentFees, selectedFees]);
 
-  const handleDateChange = useCallback((event: any, selectedDate?: Date) => {
+  // Handle date change
+  const handleDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(false);
     if (selectedDate) {
       setFormData(prev => ({ ...prev, paymentDate: selectedDate }));
     }
-  }, []);
+  };
 
-  const handleSubmit = useCallback(async () => {
-    if (!student?.id || selectedFees.size === 0) {
+  // Handle form changes
+  const handleFormChange = (field: keyof FormData, value: string | Date) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Submit payment
+  const handleSubmit = async () => {
+    if (selectedFees.size === 0) {
       Alert.alert('Error', 'Please select at least one fee to pay');
+      return;
+    }
+
+    if (!formData.receiptNumber) {
+      Alert.alert('Error', 'Please enter receipt number');
       return;
     }
 
     try {
       setLoading(true);
-
-      // Prepare the fees array from selected fees
-      const selectedFeesArray = Array.from(selectedFees).map(key => {
-        const [classFeeId] = key.split('_');
-        const allFees = [...(pendingFees?.currentMonthFees || []), ...(pendingFees?.otherPendingFees || [])];
-        const fee = allFees.find(f => f.classFeeId === parseInt(classFeeId));
-        return {
-          classFeeId: parseInt(classFeeId),
-          amount: fee?.amount || "0"
-        };
-      });
-
-      const paymentData = {
-        studentId: student.id,
-        trxId: formData.receiptNumber, // Using receipt number as transaction ID
-        fees: selectedFeesArray,
-        totalAmounAtThatTrx: selectedAmount.toString()
-      };
-
-      const response = await fetch('https://neevschool.sbs/school/submitFeePayment', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(paymentData)
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        // Refresh fee data
-        await fetchPendingFees();
-        
+      
+      // Mock submission - replace with actual API call
+      setTimeout(() => {
         Alert.alert(
           'Success',
           'Payment recorded successfully',
-          [
-            {
-              text: 'OK',
-              onPress: () => router.back(),
-            },
-          ]
+          [{ text: 'OK', onPress: () => router.back() }]
         );
-      } else {
-        throw new Error(result.message || 'Failed to submit payment');
-      }
-    } catch (error) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to submit payment');
-    } finally {
+        setLoading(false);
+      }, 1500);
+      
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to submit payment');
       setLoading(false);
-    }
-  }, [student?.id, selectedFees, pendingFees, selectedAmount, formData.receiptNumber, fetchPendingFees, router]);
-
-  const handleFormChange = useCallback((field: keyof PaymentFormData, value: string | Date) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  }, []);
-
-  const handleCreateFee = async () => {
-    if (!feeCreationData.classId || !feeCreationData.feeTypeId || !feeCreationData.amount) {
-      Alert.alert('Error', 'Please fill all required fields');
-      return;
-    }
-
-    try {
-      setCreatingFee(true);
-      const userDataStr = await SecureStore.getItemAsync('userData');
-      if (!userDataStr) {
-        throw new Error('User data not found');
-      }
-
-      const userData = JSON.parse(userDataStr);
-      const response = await fetch('https://neevschool.sbs/school/createClassFee', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-          ...feeCreationData,
-          schoolId: userData.schoolId
-        }),
-      });
-
-      const result: CreateFeeResponse = await response.json();
-
-      if (result.success) {
-        Alert.alert('Success', 'Fee structure created successfully');
-        setShowFeeCreationForm(false);
-        // Refresh fee structures
-        const updatedFeeStructures = [...feeStructures, {
-          id: result.data.id,
-          feeTypeName: feeTypes.find(ft => ft.id === feeCreationData.feeTypeId)?.name || '',
-          amount: parseFloat(result.data.amount),
-          dueDate: new Date().toISOString()
-        }];
-        setFeeStructures(updatedFeeStructures);
-              } else {
-        throw new Error(result.message || 'Failed to create fee structure');
-      }
-    } catch (error) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to create fee structure');
-    } finally {
-      setCreatingFee(false);
     }
   };
 
-  const FeeCreationForm = () => (
-    <View style={styles.card}>
-      <Text style={styles.cardTitle}>Create New Fee Structure</Text>
-      
-      <View style={styles.formGroup}>
-        <Text style={styles.label}>Class*</Text>
-        <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={feeCreationData.classId}
-            onValueChange={(value) => setFeeCreationData(prev => ({ ...prev, classId: Number(value) }))}
-            style={styles.picker}
-          >
-            <Picker.Item label="Select Class" value={0} />
-            {classes.map(cls => (
-              <Picker.Item
-                key={cls.id}
-                label={cls.name}
-                value={cls.id}
-              />
-            ))}
-          </Picker>
+  // Helper function to format date
+  const formatDate = (dateString?: string): string => {
+    if (!dateString) return 'Not set';
+    
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric' 
+    });
+  };
+
+  // Render monthly fee item
+  const renderMonthlyFeeItem = (feeType: FeeType) => {
+    return (
+      <View key={`fee-type-${feeType.id}`} style={styles.feeTypeContainer}>
+        <View style={styles.feeTypeHeader}>
+          <View style={styles.feeTypeIconContainer}>
+            <MaterialCommunityIcons name="cash-multiple" size={24} color="#512da8" />
+          </View>
+          <View style={styles.feeTypeInfo}>
+            <Text style={styles.feeTypeName}>{feeType.name}</Text>
+            <Text style={styles.feeTypeFrequency}>{feeType.frequency} • ₹{parseFloat(feeType.totalAmount).toLocaleString()}/year</Text>
+          </View>
+        </View>
+        
+        <View style={styles.monthsContainer}>
+          {feeType.months.map((monthData, index) => {
+            const isMonthSelectable = monthData.status === "PENDING";
+            const key = `${feeType.id}_${monthData.month}`;
+            const isSelected = selectedFees.has(key);
+            
+            return (
+              <TouchableOpacity
+                key={`month-${monthData.month}`}
+                style={[
+                  styles.monthItem,
+                  isSelected && styles.selectedMonthItem,
+                  !isMonthSelectable && styles.disabledMonthItem
+                ]}
+                onPress={() => isMonthSelectable && handleFeeSelect(feeType.id, monthData.month)}
+                disabled={!isMonthSelectable}
+              >
+                <View style={styles.monthTopRow}>
+                  <Text style={[styles.monthName, isSelected && styles.selectedText]}>
+                    {monthData.month}
+                  </Text>
+                  {monthData.status === "PAID" && (
+                    <View style={styles.paidBadge}>
+                      <Text style={styles.paidBadgeText}>PAID</Text>
+                    </View>
+                  )}
+                </View>
+                
+                <View style={styles.monthDetailsRow}>
+                  <Text style={[styles.monthAmount, isSelected && styles.selectedText]}>
+                    ₹{parseFloat(monthData.amount).toLocaleString()}
+                  </Text>
+                  {monthData.dueDate && (
+                    <Text style={styles.dueDateText}>
+                      Due: {formatDate(monthData.dueDate)}
+                    </Text>
+                  )}
+                </View>
+                
+                {isMonthSelectable && (
+                  <View style={[styles.checkCircle, isSelected && styles.selectedCheckCircle]}>
+                    <MaterialIcons 
+                      name={isSelected ? "check-circle" : "radio-button-unchecked"} 
+                      size={24} 
+                      color={isSelected ? "#4caf50" : "#ddd"} 
+                    />
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
+    );
+  };
 
-      <View style={styles.formGroup}>
-        <Text style={styles.label}>Fee Type*</Text>
-        <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={feeCreationData.feeTypeId}
-            onValueChange={(value) => setFeeCreationData(prev => ({ ...prev, feeTypeId: Number(value) }))}
-            style={styles.picker}
-          >
-            <Picker.Item label="Select Fee Type" value={0} />
-            {feeTypes.map(type => (
-              <Picker.Item
-                key={type.id}
-                label={type.name}
-                value={type.id}
-              />
-            ))}
-          </Picker>
+  // Render yearly fee item
+  const renderYearlyFeeItem = (feeType: FeeType) => {
+    const isSelected = selectedFees.has(`${feeType.id}`);
+    const isPending = feeType.status === "PENDING";
+    
+    return (
+      <TouchableOpacity
+        key={`fee-type-${feeType.id}`}
+        style={[
+          styles.yearlyFeeItem,
+          isSelected && styles.selectedYearlyFeeItem,
+          !isPending && styles.disabledYearlyFeeItem
+        ]}
+        onPress={() => isPending && handleFeeSelect(feeType.id)}
+        disabled={!isPending}
+      >
+        <View style={styles.yearlyFeeContent}>
+          <View style={styles.yearlyFeeIconContainer}>
+            <MaterialCommunityIcons
+              name="cash-register"
+              size={28}
+              color={isSelected ? "#4caf50" : "#512da8"}
+            />
+          </View>
+          
+          <View style={styles.yearlyFeeInfo}>
+            <Text style={[styles.yearlyFeeName, isSelected && styles.selectedText]}>
+              {feeType.name}
+            </Text>
+            <Text style={styles.yearlyFeeFrequency}>
+              {feeType.frequency} • Due: {formatDate(feeType.months[0]?.dueDate)}
+            </Text>
+          </View>
+          
+          <View style={styles.yearlyFeeAmountContainer}>
+            <Text style={[styles.yearlyFeeAmount, isSelected && styles.selectedText]}>
+              ₹{parseFloat(feeType.totalAmount).toLocaleString()}
+            </Text>
+            {isPending ? (
+              <View style={[styles.checkCircle, isSelected && styles.selectedCheckCircle]}>
+                <MaterialIcons 
+                  name={isSelected ? "check-circle" : "radio-button-unchecked"} 
+                  size={24} 
+                  color={isSelected ? "#4caf50" : "#ddd"} 
+                />
+              </View>
+            ) : (
+              <View style={styles.paidBadge}>
+                <Text style={styles.paidBadgeText}>PAID</Text>
+              </View>
+            )}
+          </View>
         </View>
-      </View>
+      </TouchableOpacity>
+    );
+  };
 
-      <View style={styles.formGroup}>
-        <Text style={styles.label}>Amount*</Text>
-        <TextInput
-          style={styles.input}
-          value={feeCreationData.amount.toString()}
-          onChangeText={(value) => setFeeCreationData(prev => ({ ...prev, amount: Number(value.replace(/[^0-9]/g, '')) }))}
-          keyboardType="numeric"
-          placeholder="Enter amount"
-          placeholderTextColor="#999"
-        />
-      </View>
+  const paymentModes: PaymentMode[] = [
+    { id: 'cash', name: 'Cash' },
+    { id: 'upi', name: 'UPI' },
+    { id: 'bank_transfer', name: 'Bank Transfer' },
+    { id: 'cheque', name: 'Cheque' },
+  ];
 
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={[styles.button, styles.cancelButton]}
-          onPress={() => setShowFeeCreationForm(false)}
-        >
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.button, styles.createButton, creatingFee && styles.buttonDisabled]}
-          onPress={handleCreateFee}
-          disabled={creatingFee}
-        >
-          {creatingFee ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.createButtonText}>Create Fee</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+  if (loading && !studentFees) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#512da8" />
+          <Text style={styles.loadingText}>Loading student fees...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-  if (!student) {
+  if (error) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
-          <MaterialIcons name="error-outline" size={48} color="#666" />
-          <Text style={styles.errorText}>Student information not found</Text>
+          <MaterialIcons name="error-outline" size={48} color="#f44336" />
+          <Text style={styles.errorText}>Failed to load student fees</Text>
+          <Text style={styles.errorSubText}>{error}</Text>
         </View>
       </SafeAreaView>
     );
@@ -523,178 +415,171 @@ const SubmitPaymentScreen = () => {
         >
           <MaterialIcons name="arrow-back" size={24} color="#512da8" />
         </TouchableOpacity>
-        <Text style={styles.title}>Submit Payment</Text>
+        <Text style={styles.title}>Fee Payment</Text>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {showFeeCreationForm && <FeeCreationForm />}
-
         {/* Student Info Card */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Student Details</Text>
-          <View style={styles.studentInfo}>
-            <Text style={styles.studentName}>{student.name}</Text>
-            <Text style={styles.studentDetail}>Section {student.sectionName}</Text>
-            <Text style={styles.studentDetail}>{student.parentName}</Text>
-            <Text style={styles.studentDetail}>{student.mobileNumber}</Text>
+          <View style={styles.cardHeader}>
+            <MaterialIcons name="person" size={24} color="#512da8" />
+            <Text style={styles.cardTitle}>Student Details</Text>
+          </View>
+          <View style={styles.studentInfoContainer}>
+            <Text style={styles.studentName}>
+              {studentFees?.studentDetails.name}
+            </Text>
+            <View style={styles.studentDetailsRow}>
+              <View style={styles.detailItem}>
+                <Text style={styles.detailLabel}>Class</Text>
+                <Text style={styles.detailValue}>
+                  {studentFees?.studentDetails.class} {studentFees?.studentDetails.section}
+                </Text>
+              </View>
+              <View style={styles.detailItem}>
+                <Text style={styles.detailLabel}>Academic Year</Text>
+                <Text style={styles.detailValue}>
+                  {studentFees?.academicYear.name}
+                </Text>
+              </View>
+            </View>
           </View>
         </View>
 
-        {/* Current Month Fees */}
-        {pendingFees?.currentMonthFees.length > 0 ? (
-          <View style={styles.card}>
-            <View style={styles.cardTitleContainer}>
-              <MaterialCommunityIcons name="calendar-clock" size={24} color="#512da8" />
-              <Text style={styles.cardTitle}>Current Month Fees</Text>
-            </View>
-            {pendingFees.currentMonthFees.map((fee, index) => 
-              renderFeeItem(fee, index, 'current')
-            )}
+        {/* Fee Structure */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <MaterialCommunityIcons name="cash-multiple" size={24} color="#512da8" />
+            <Text style={styles.cardTitle}>Fee Structure</Text>
           </View>
-        ) : (
-          <View style={styles.card}>
-            <View style={styles.cardTitleContainer}>
-              <MaterialCommunityIcons name="calendar-clock" size={24} color="#512da8" />
-              <Text style={styles.cardTitle}>Current Month Fees</Text>
-            </View>
-            <View style={styles.noFeesContainer}>
-              <MaterialCommunityIcons name="cash-remove" size={48} color="#ccc" />
-              <Text style={styles.noFeesText}>No fees added to this structure</Text>
-              <Text style={styles.noFeesSubText}>Please contact the administrator to add fee structure</Text>
-            </View>
-          </View>
-        )}
 
-        {/* Other Pending Fees */}
-        {pendingFees?.otherPendingFees.length > 0 ? (
-          <View style={styles.card}>
-            <View style={styles.cardTitleContainer}>
-              <MaterialCommunityIcons name="calendar-alert" size={24} color="#f44336" />
-              <Text style={[styles.cardTitle, { color: '#f44336' }]}>Other Pending Fees</Text>
-            </View>
-            {pendingFees.otherPendingFees.map((fee, index) => 
-              renderFeeItem(fee, index, 'pending')
-            )}
-          </View>
-        ) : (
-          <View style={styles.card}>
-            <View style={styles.cardTitleContainer}>
-              <MaterialCommunityIcons name="calendar-alert" size={24} color="#f44336" />
-              <Text style={[styles.cardTitle, { color: '#f44336' }]}>Other Pending Fees</Text>
-            </View>
-            <View style={styles.noFeesContainer}>
-              <MaterialCommunityIcons name="cash-remove" size={48} color="#ccc" />
-              <Text style={styles.noFeesText}>No pending fees</Text>
-              <Text style={styles.noFeesSubText}>All fees are up to date</Text>
-            </View>
-          </View>
-        )}
+          {/* Monthly and Yearly Fees */}
+          {studentFees?.feeTypes.map(feeType => 
+            feeType.frequency === "Monthly" 
+              ? renderMonthlyFeeItem(feeType)
+              : renderYearlyFeeItem(feeType)
+          )}
+        </View>
 
         {/* Payment Summary */}
         <View style={styles.card}>
-          <View style={styles.cardTitleContainer}>
-            <MaterialCommunityIcons name="cash-multiple" size={24} color="#512da8" />
+          <View style={styles.cardHeader}>
+            <MaterialCommunityIcons name="chart-donut" size={24} color="#512da8" />
             <Text style={styles.cardTitle}>Payment Summary</Text>
           </View>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryLabelContainer}>
-              <MaterialCommunityIcons name="cash-check" size={20} color="#4caf50" style={styles.summaryIcon} />
-              <Text style={styles.summaryLabel}>Selected Amount:</Text>
+          
+          <View style={styles.summaryContainer}>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Total Fees</Text>
+              <Text style={styles.summaryValue}>
+                ₹{parseFloat(studentFees?.summary.totalFees || "0").toLocaleString()}
+              </Text>
             </View>
-            <Text style={styles.summaryAmount}>₹{selectedAmount.toLocaleString()}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryLabelContainer}>
-              <MaterialCommunityIcons name="calendar-clock" size={20} color="#512da8" style={styles.summaryIcon} />
-              <Text style={styles.summaryLabel}>Current Month Total:</Text>
+            
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Amount Paid</Text>
+              <Text style={styles.summaryValue}>
+                ₹{parseFloat(studentFees?.summary.totalPaid || "0").toLocaleString()}
+              </Text>
             </View>
-            <Text style={styles.summaryAmount}>₹{pendingFees?.totalCurrentAmount.toLocaleString()}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryLabelContainer}>
-              <MaterialCommunityIcons name="alert-circle" size={20} color="#f44336" style={styles.summaryIcon} />
-              <Text style={styles.summaryLabel}>Total Pending:</Text>
+            
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Current Selection</Text>
+              <Text style={[styles.summaryValue, styles.selectedAmount]}>
+                ₹{selectedAmount.toLocaleString()}
+              </Text>
             </View>
-            <Text style={styles.summaryAmount}>₹{pendingFees?.totalPendingAmount.toLocaleString()}</Text>
+            
+            <View style={[styles.summaryRow, styles.totalRow]}>
+              <Text style={styles.totalLabel}>Balance Due</Text>
+              <Text style={styles.totalValue}>
+                ₹{parseFloat(studentFees?.summary.totalBalance || "0").toLocaleString()}
+              </Text>
+            </View>
           </View>
         </View>
 
-        {/* Payment Form */}
+        {/* Payment Details Form */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Payment Details</Text>
+          <View style={styles.cardHeader}>
+            <MaterialIcons name="payment" size={24} color="#512da8" />
+            <Text style={styles.cardTitle}>Payment Details</Text>
+          </View>
           
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Amount*</Text>
-            <TextInput
-              style={styles.input}
-              value={selectedAmount.toString()}
-              editable={false}
-              placeholder="Selected amount"
-              placeholderTextColor="#999"
-            />
-          </View>
-
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Payment Mode*</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={formData.paymentMode}
-                onValueChange={(value) => handleFormChange('paymentMode', value)}
-                style={styles.picker}
-              >
-                {paymentModes.map(mode => (
-                  <Picker.Item key={mode.id} label={mode.name} value={mode.id} />
-                ))}
-              </Picker>
+          <View style={styles.formContainer}>
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Payment Amount*</Text>
+              <TextInput
+                style={styles.formInput}
+                value={selectedAmount.toString()}
+                editable={false}
+                placeholder="0.00"
+                placeholderTextColor="#999"
+              />
             </View>
-          </View>
-
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Payment Date*</Text>
-            <TouchableOpacity
-              style={styles.dateButton}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <Text style={styles.dateButtonText}>
-                {formData.paymentDate.toLocaleDateString()}
-              </Text>
-              <MaterialIcons name="calendar-today" size={20} color="#512da8" />
-            </TouchableOpacity>
-          </View>
-
-          {showDatePicker && (
-            <DateTimePicker
-              value={formData.paymentDate}
-              mode="date"
-              display="default"
-              onChange={handleDateChange}
-              maximumDate={new Date()}
-            />
-          )}
-
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Receipt Number*</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.receiptNumber}
-              onChangeText={(value) => handleFormChange('receiptNumber', value)}
-              placeholder="Enter receipt number"
-              placeholderTextColor="#999"
-            />
-          </View>
-
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Remarks</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={formData.remarks}
-              onChangeText={(value) => handleFormChange('remarks', value)}
-              placeholder="Enter remarks (optional)"
-              placeholderTextColor="#999"
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
+            
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Payment Mode*</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={formData.paymentMode}
+                  onValueChange={(value) => handleFormChange('paymentMode', value)}
+                  style={styles.picker}
+                >
+                  {paymentModes.map(mode => (
+                    <Picker.Item key={mode.id} label={mode.name} value={mode.id} />
+                  ))}
+                </Picker>
+              </View>
+            </View>
+            
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Payment Date*</Text>
+              <TouchableOpacity
+                style={styles.dateButton}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Text style={styles.dateButtonText}>
+                  {formData.paymentDate.toLocaleDateString()}
+                </Text>
+                <MaterialIcons name="calendar-today" size={20} color="#512da8" />
+              </TouchableOpacity>
+            </View>
+            
+            {showDatePicker && (
+              <DateTimePicker
+                value={formData.paymentDate}
+                mode="date"
+                display="default"
+                onChange={handleDateChange}
+                maximumDate={new Date()}
+              />
+            )}
+            
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Receipt Number*</Text>
+              <TextInput
+                style={styles.formInput}
+                value={formData.receiptNumber}
+                onChangeText={(value) => handleFormChange('receiptNumber', value)}
+                placeholder="Enter receipt number"
+                placeholderTextColor="#999"
+              />
+            </View>
+            
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Remarks</Text>
+              <TextInput
+                style={[styles.formInput, styles.textArea]}
+                value={formData.remarks}
+                onChangeText={(value) => handleFormChange('remarks', value)}
+                placeholder="Enter any additional notes (optional)"
+                placeholderTextColor="#999"
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -712,28 +597,116 @@ const SubmitPaymentScreen = () => {
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <>
-              <MaterialIcons name="payment" size={20} color="#fff" />
-              <Text style={styles.submitButtonText}>Submit Payment</Text>
-        </>
-      )}
+              <MaterialIcons name="check-circle" size={20} color="#fff" />
+              <Text style={styles.submitButtonText}>
+                Submit Payment (₹{selectedAmount.toLocaleString()})
+              </Text>
+            </>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
+// Define proper TypeScript types for styles
+interface Style {
+  container: ViewStyle;
+  header: ViewStyle;
+  backButton: ViewStyle;
+  title: TextStyle;
+  content: ViewStyle;
+  loadingContainer: ViewStyle;
+  loadingText: TextStyle;
+  errorContainer: ViewStyle;
+  errorText: TextStyle;
+  errorSubText: TextStyle;
+  card: ViewStyle;
+  cardHeader: ViewStyle;
+  cardTitle: TextStyle;
+  studentInfoContainer: ViewStyle;
+  studentName: TextStyle;
+  studentDetailsRow: ViewStyle;
+  detailItem: ViewStyle;
+  detailLabel: TextStyle;
+  detailValue: TextStyle;
+  feeTypeContainer: ViewStyle;
+  feeTypeHeader: ViewStyle;
+  feeTypeIconContainer: ViewStyle;
+  feeTypeInfo: ViewStyle;
+  feeTypeName: TextStyle;
+  feeTypeFrequency: TextStyle;
+  monthsContainer: ViewStyle;
+  monthItem: ViewStyle;
+  selectedMonthItem: ViewStyle;
+  disabledMonthItem: ViewStyle;
+  monthTopRow: ViewStyle;
+  monthName: TextStyle;
+  selectedText: TextStyle;
+  monthDetailsRow: ViewStyle;
+  monthAmount: TextStyle;
+  dueDateText: TextStyle;
+  checkCircle: ViewStyle;
+  selectedCheckCircle: ViewStyle;
+  paidBadge: ViewStyle;
+  paidBadgeText: TextStyle;
+  yearlyFeeItem: ViewStyle;
+  selectedYearlyFeeItem: ViewStyle;
+  disabledYearlyFeeItem: ViewStyle;
+  yearlyFeeContent: ViewStyle;
+  yearlyFeeIconContainer: ViewStyle;
+  yearlyFeeInfo: ViewStyle;
+  yearlyFeeName: TextStyle;
+  yearlyFeeFrequency: TextStyle;
+  yearlyFeeAmountContainer: ViewStyle;
+  yearlyFeeAmount: TextStyle;
+  summaryContainer: ViewStyle;
+  summaryRow: ViewStyle;
+  summaryLabel: TextStyle;
+  summaryValue: TextStyle;
+  selectedAmount: TextStyle;
+  totalRow: ViewStyle;
+  totalLabel: TextStyle;
+  totalValue: TextStyle;
+  formContainer: ViewStyle;
+  formGroup: ViewStyle;
+  formLabel: TextStyle;
+  formInput: TextStyle;
+  textArea: TextStyle;
+  pickerContainer: ViewStyle;
+  picker: ViewStyle;
+  dateButton: ViewStyle;
+  dateButtonText: TextStyle;
+  footer: ViewStyle;
+  submitButton: ViewStyle;
+  submitButtonDisabled: ViewStyle;
+  submitButtonText: TextStyle;
+}
+
+const styles = StyleSheet.create<Style>({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f7f9fc',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   backButton: {
     padding: 8,
@@ -746,164 +719,356 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 16,
+    padding: 18,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  errorText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#f44336',
+    marginTop: 16,
+  },
+  errorSubText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 8,
+    textAlign: 'center',
   },
   card: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: 14,
+    padding: 18,
+    marginBottom: 20,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.12,
+        shadowRadius: 5,
       },
       android: {
-        elevation: 3,
+        elevation: 4,
       },
     }),
   },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    paddingBottom: 14,
+  },
   cardTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 12,
+    marginLeft: 12,
   },
-  studentInfo: {
-    borderLeftWidth: 3,
+  studentInfoContainer: {
+    borderLeftWidth: 4,
     borderLeftColor: '#512da8',
-    paddingLeft: 12,
+    paddingLeft: 16,
+    marginLeft: 2,
+    marginTop: 4,
   },
   studentName: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 22,
+    fontWeight: 'bold',
     color: '#333',
+    marginBottom: 10,
+  },
+  studentDetailsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  detailItem: {
+    marginRight: 24,
     marginBottom: 4,
   },
-  studentDetail: {
-    fontSize: 14,
+  detailLabel: {
+    fontSize: 12,
     color: '#666',
-    marginBottom: 2,
   },
-  feeItem: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-        elevation: 2,
-      },
-  selectedFeeItem: {
-    borderColor: '#4caf50',
-    backgroundColor: '#f1f8e9',
-  },
-  feeItemHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  feeIconContainer: {
-    marginRight: 12,
+  detailValue: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
   },
   feeTypeContainer: {
-    flex: 1,
-    marginRight: 8,
+    marginBottom: 20,
   },
-  feeTypeRow: {
+  feeTypeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    marginBottom: 4,
+    marginBottom: 16,
+    marginTop: 4,
   },
-  feeType: {
-    fontSize: 16,
+  feeTypeIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#e8eaf6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#512da8',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  feeTypeInfo: {
+    flex: 1,
+  },
+  feeTypeName: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 2,
+  },
+  feeTypeFrequency: {
+    fontSize: 14,
+    color: '#666',
+  },
+  monthsContainer: {
+    marginLeft: 16,
+    marginTop: 8,
+  },
+  monthItem: {
+    backgroundColor: '#f9f9f9',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: '#512da8',
+    flexDirection: 'column',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  selectedMonthItem: {
+    backgroundColor: '#e8f5e9',
+    borderLeftColor: '#4caf50',
+  },
+  disabledMonthItem: {
+    opacity: 0.6,
+  },
+  monthTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  monthName: {
+    fontSize: 15,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 4,
   },
   selectedText: {
     color: '#4caf50',
   },
-  feePeriod: {
-    fontSize: 14,
-    color: '#666',
+  monthDetailsRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 8,
   },
-  periodIcon: {
-    marginRight: 4,
-  },
-  feeAmountContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  feeAmount: {
+  monthAmount: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#333',
-    marginRight: 12,
+    fontWeight: 'bold',
+    color: '#512da8',
+  },
+  dueDateText: {
+    fontSize: 12,
+    color: '#666',
   },
   checkCircle: {
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
+    position: 'absolute',
+    right: 12,
+    top: 12,
   },
   selectedCheckCircle: {
     transform: [{ scale: 1.1 }],
   },
-  totalContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
+  paidBadge: {
+    backgroundColor: '#e0f2f1',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#80cbc4',
   },
-  totalLabel: {
+  paidBadgeText: {
+    fontSize: 12,
+    color: '#00897b',
+    fontWeight: '600',
+  },
+  yearlyFeeItem: {
+    backgroundColor: '#f9f9f9',
+    borderRadius: 10,
+    padding: 18,
+    marginBottom: 16,
+    borderLeftWidth: 3,
+    borderLeftColor: '#512da8',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  selectedYearlyFeeItem: {
+    backgroundColor: '#e8f5e9',
+    borderLeftColor: '#4caf50',
+  },
+  disabledYearlyFeeItem: {
+    opacity: 0.6,
+  },
+  yearlyFeeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  yearlyFeeIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#e8eaf6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  yearlyFeeInfo: {
+    flex: 1,
+  },
+  yearlyFeeName: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
   },
-  totalAmount: {
+  yearlyFeeFrequency: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+  },
+  yearlyFeeAmountContainer: {
+    alignItems: 'flex-end',
+  },
+  yearlyFeeAmount: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#512da8',
+    marginBottom: 4,
+  },
+  summaryContainer: {
+    backgroundColor: '#f5f7fa',
+    borderRadius: 10,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#e8eaf6',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  summaryLabel: {
+    fontSize: 15,
+    color: '#666',
+  },
+  summaryValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  selectedAmount: {
+    color: '#4caf50',
+    fontWeight: 'bold',
+  },
+  totalRow: {
+    marginTop: 12,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+  },
+  totalLabel: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  totalValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#f44336',
+  },
+  formContainer: {
+    marginTop: 8,
   },
   formGroup: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  label: {
-    fontSize: 14,
+  formLabel: {
+    fontSize: 15,
     fontWeight: '500',
     color: '#333',
-    marginBottom: 8,
+    marginBottom: 10,
+    marginLeft: 2,
   },
-  input: {
-    backgroundColor: '#fff',
+  formInput: {
+    backgroundColor: '#f9f9f9',
     borderWidth: 1,
     borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
+    borderRadius: 10,
+    padding: 14,
+    fontSize: 15,
     color: '#333',
+    marginTop: 2,
   },
   textArea: {
     height: 80,
     textAlignVertical: 'top',
   },
   pickerContainer: {
+    backgroundColor: '#f9f9f9',
     borderWidth: 1,
     borderColor: '#ddd',
-    borderRadius: 8,
+    borderRadius: 10,
     overflow: 'hidden',
+    marginTop: 2,
   },
   picker: {
     height: 50,
@@ -912,38 +1077,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#f9f9f9',
     borderWidth: 1,
     borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 10,
+    padding: 14,
+    marginTop: 2,
   },
   dateButtonText: {
     fontSize: 14,
     color: '#333',
   },
   footer: {
-    padding: 16,
+    padding: 18,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 18,
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#eee',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -3 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   submitButton: {
     backgroundColor: '#512da8',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
-    borderRadius: 8,
+    padding: 18,
+    borderRadius: 12,
+    marginHorizontal: 4,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
+        shadowColor: '#512da8',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
       },
       android: {
-        elevation: 4,
+        elevation: 5,
       },
     }),
   },
@@ -955,137 +1134,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#666',
-    marginTop: 12,
-    textAlign: 'center',
-  },
-  addFeeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#512da8',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 16,
-    justifyContent: 'center',
-  },
-  addFeeButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 20,
-  },
-  button: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginHorizontal: 8,
-  },
-  cancelButton: {
-    backgroundColor: '#f5f5f5',
-  },
-  createButton: {
-    backgroundColor: '#512da8',
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  cancelButtonText: {
-    color: '#666',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  createButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  summaryLabelContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  summaryIcon: {
-    marginRight: 8,
-  },
-  summaryLabel: {
-    fontSize: 16,
-    color: '#666',
-  },
-  summaryAmount: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#512da8',
-  },
-  cardTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  monthBadge: {
-    backgroundColor: '#e3f2fd',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-    marginLeft: 8,
-    borderWidth: 1,
-    borderColor: '#90caf9',
-  },
-  selectedMonthBadge: {
-    backgroundColor: '#e8f5e9',
-    borderColor: '#a5d6a7',
-  },
-  monthBadgeText: {
-    fontSize: 12,
-    color: '#1976d2',
-    fontWeight: '600',
-  },
-  selectedMonthBadgeText: {
-    color: '#4caf50',
-  },
-  noFeesContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    backgroundColor: '#f8f8f8',
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  noFeesText: {
-    fontSize: 16,
-    color: '#666',
-    marginTop: 12,
-    fontWeight: '500',
-  },
-  noFeesSubText: {
-    fontSize: 14,
-    color: '#999',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-});
+  }});
+  
 
 export default SubmitPaymentScreen;
-
