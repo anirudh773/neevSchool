@@ -242,11 +242,9 @@ const handleSubmit = async () => {
       const feeType = studentFees?.feeTypes.find(f => f.id === feeTypeId);
       
       if (feeType) {
-        // console.log(feeType.frequency, "dsdsdsdsd============================================")
           // For monthly fees
           if(feeType.frequency == 'Monthly') {
             const monthData = feeType.months.find(m => m.month === month);
-            console.log(monthData, "dsdsdsdsd============================================")
             if (monthData) {
               // Use the classFeeId from the monthData instead of the feeTypeId
               submissions.push({
@@ -291,8 +289,6 @@ const handleSubmit = async () => {
     });
     
     const result = await response.json();
-    console.log(result)
-    
     if (result.success && result) {
       Alert.alert(
         'Success',
@@ -303,7 +299,6 @@ const handleSubmit = async () => {
       throw new Error(result.message || 'Failed to submit payment');
     }
   } catch (err: any) {
-    console.log(err);
     Alert.alert('Error', err.message || 'Failed to submit payment');
   } finally {
     setLoading(false);
