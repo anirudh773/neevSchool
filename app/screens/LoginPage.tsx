@@ -209,7 +209,7 @@ const LoginPage = () => {
       await Notifications.scheduleNotificationAsync({
         content: {
           title: "Login Successful!",
-          body: "Welcome to St. Thomas mission school",
+          body: "Welcome to Neev learn",
           data: { screen: 'Home' },
         },
         trigger: null, // Show immediately
@@ -315,7 +315,7 @@ const LoginPage = () => {
             source={require('../../assets/images/image.png')}
             style={styles.logo}
           />
-          <Text style={styles.companyName}>St. Thomas mission school</Text>
+          <Text style={styles.companyName}>Neev Learn Group</Text>
           <Text style={styles.location}>Jaunpur</Text>
         </View>
 
