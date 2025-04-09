@@ -44,6 +44,11 @@ interface Student {
   aadhaarNumber: string;
   section: Section;
   class: Class;
+  bloodGroup: number | null;
+  height: string | null;
+  weight: string | null;
+  motherName: string | null;
+  isStudentNew: boolean;
 }
 
 interface RouteParams {
@@ -108,7 +113,12 @@ const StudentListScreen = () => {
       admissionDate: selectedStudent.admissionDate,
       parentName: selectedStudent.parentName,
       address: selectedStudent.address,
-      email: selectedStudent.email
+      email: selectedStudent.email,
+      bloodGroup: selectedStudent.bloodGroup || 1,
+      height: selectedStudent.height || '',
+      weight: selectedStudent.weight || '',
+      motherName: selectedStudent.motherName || '',
+      isStudentNew: selectedStudent.isStudentNew
     }
 
     try {
@@ -293,6 +303,119 @@ const StudentListScreen = () => {
                 numberOfLines={3}
                 placeholder="Address"
               />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Blood Group (Optional)</Text>
+              <View style={styles.bloodGroupContainer}>
+                {['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].map((group, index) => (
+                  <TouchableOpacity
+                    key={group}
+                    style={[
+                      styles.bloodGroupButton,
+                      selectedStudent?.bloodGroup === index + 1 && styles.bloodGroupButtonActive
+                    ]}
+                    onPress={() => 
+                      setSelectedStudent(prev => 
+                        prev ? { ...prev, bloodGroup: index + 1 } : null
+                      )
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.bloodGroupButtonText,
+                        selectedStudent?.bloodGroup === index + 1 && styles.bloodGroupButtonTextActive
+                      ]}
+                    >
+                      {group}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Height (cm) (Optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={selectedStudent?.height || ''}
+                onChangeText={(text) =>
+                  setSelectedStudent(prev => prev ? { ...prev, height: text } : null)
+                }
+                placeholder="Enter height in cm"
+                keyboardType="numeric"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Weight (kg) (Optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={selectedStudent?.weight || ''}
+                onChangeText={(text) =>
+                  setSelectedStudent(prev => prev ? { ...prev, weight: text } : null)
+                }
+                placeholder="Enter weight in kg"
+                keyboardType="numeric"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Mother's Name</Text>
+              <TextInput
+                style={styles.input}
+                value={selectedStudent?.motherName || ''}
+                onChangeText={(text) =>
+                  setSelectedStudent(prev => prev ? { ...prev, motherName: text } : null)
+                }
+                placeholder="Enter mother's name"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Student Status</Text>
+              <View style={styles.statusContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.statusButton,
+                    selectedStudent?.isStudentNew && styles.statusButtonActive
+                  ]}
+                  onPress={() => 
+                    setSelectedStudent(prev => 
+                      prev ? { ...prev, isStudentNew: true } : null
+                    )
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.statusButtonText,
+                      selectedStudent?.isStudentNew && styles.statusButtonTextActive
+                    ]}
+                  >
+                    New Student
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.statusButton,
+                    selectedStudent?.isStudentNew === false && styles.statusButtonActive
+                  ]}
+                  onPress={() => 
+                    setSelectedStudent(prev => 
+                      prev ? { ...prev, isStudentNew: false } : null
+                    )
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.statusButtonText,
+                      selectedStudent?.isStudentNew === false && styles.statusButtonTextActive
+                    ]}
+                  >
+                    Transfer Student
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={styles.buttonContainer}>
@@ -668,6 +791,54 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '500',
+  },
+  bloodGroupContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  bloodGroupButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#ffffff',
+  },
+  bloodGroupButtonActive: {
+    backgroundColor: '#4f46e5',
+    borderColor: '#4f46e5',
+  },
+  bloodGroupButtonText: {
+    color: '#1f2937',
+    fontSize: 14,
+  },
+  bloodGroupButtonTextActive: {
+    color: '#ffffff',
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  statusButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+  },
+  statusButtonActive: {
+    backgroundColor: '#4f46e5',
+    borderColor: '#4f46e5',
+  },
+  statusButtonText: {
+    color: '#1f2937',
+    fontSize: 16,
+  },
+  statusButtonTextActive: {
+    color: '#ffffff',
   },
 });
 

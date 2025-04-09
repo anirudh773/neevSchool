@@ -93,7 +93,7 @@ const ExamDashboardScreen: React.FC = () => {
       let userInfo = await SecureStore.getItemAsync('userData');
       userInfo = JSON.parse(userInfo);
       if(userInfo && userInfo.role && userInfo.role == 2 ){
-        const classesData = await SecureStore.getItemAsync('teacherClasses');
+        const classesData = await SecureStore.getItemAsync('schoolClasses');
         if (classesData) {
           const parsedData = JSON.parse(classesData);
           setClasses(parsedData || []);

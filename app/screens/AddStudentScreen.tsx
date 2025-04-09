@@ -32,6 +32,11 @@ const AddStudentScreen = () => {
     address: '',
     email: '',
     aadhaarNumber: '',
+    bloodGroup: 1,
+    height: '',
+    weight: '',
+    motherName: '',
+    isStudentNew: true
   });
 
   const handleInputChange = (field: string, value: any) => {
@@ -63,6 +68,7 @@ const AddStudentScreen = () => {
     setLoading(true)
     if (!formData.firstName || !formData.lastName || !formData.aadhaarNumber) {
       Alert.alert('Error', 'Name and Aadhaar Number are required');
+      setLoading(false);
       return;
     }
 
@@ -72,6 +78,9 @@ const AddStudentScreen = () => {
         dateOfBirth: formatDateForAPI(formData.dateOfBirth),
         admissionDate: formatDateForAPI(formData.admissionDate),
         gender: formData.gender === 'male' ? 1 : formData.gender === 'female' ? 2 : 3,
+        height: formData.height || '',
+        weight: formData.weight || '',
+        bloodGroup: formData.bloodGroup || null,
       };
       const response = await fetch('https://neevschool.sbs/school/addStudent', {
         method: 'POST',
@@ -103,6 +112,11 @@ const AddStudentScreen = () => {
                   address: '',
                   email: '',
                   aadhaarNumber: '',
+                  bloodGroup: 1,
+                  height: '',
+                  weight: '',
+                  motherName: '',
+                  isStudentNew: true
                 });
               },
               style: 'default'
@@ -248,7 +262,7 @@ const AddStudentScreen = () => {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Aadhaar Number *</Text>
+          <Text style={styles.label}>UID number (Aadhaar Number *)</Text>
           <TextInput
             style={styles.input}
             value={formData.aadhaarNumber}
@@ -269,6 +283,101 @@ const AddStudentScreen = () => {
             multiline
             numberOfLines={4}
           />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Blood Group (Optional)</Text>
+          <View style={styles.bloodGroupContainer}>
+            {['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].map((group, index) => (
+              <TouchableOpacity
+                key={group}
+                style={[
+                  styles.bloodGroupButton,
+                  formData.bloodGroup === index + 1 && styles.bloodGroupButtonActive
+                ]}
+                onPress={() => handleInputChange('bloodGroup', index + 1)}
+              >
+                <Text
+                  style={[
+                    styles.bloodGroupButtonText,
+                    formData.bloodGroup === index + 1 && styles.bloodGroupButtonTextActive
+                  ]}
+                >
+                  {group}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Height (cm) (Optional)</Text>
+          <TextInput
+            style={styles.input}
+            value={formData.height}
+            onChangeText={(value) => handleInputChange('height', value)}
+            placeholder="Enter height in cm"
+            keyboardType="numeric"
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Weight (kg) (Optional)</Text>
+          <TextInput
+            style={styles.input}
+            value={formData.weight}
+            onChangeText={(value) => handleInputChange('weight', value)}
+            placeholder="Enter weight in kg"
+            keyboardType="numeric"
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Mother's Name</Text>
+          <TextInput
+            style={styles.input}
+            value={formData.motherName}
+            onChangeText={(value) => handleInputChange('motherName', value)}
+            placeholder="Enter mother's name"
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Student Status</Text>
+          <View style={styles.statusContainer}>
+            <TouchableOpacity
+              style={[
+                styles.statusButton,
+                formData.isStudentNew && styles.statusButtonActive
+              ]}
+              onPress={() => handleInputChange('isStudentNew', true)}
+            >
+              <Text
+                style={[
+                  styles.statusButtonText,
+                  formData.isStudentNew && styles.statusButtonTextActive
+                ]}
+              >
+                New Student
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.statusButton,
+                !formData.isStudentNew && styles.statusButtonActive
+              ]}
+              onPress={() => handleInputChange('isStudentNew', false)}
+            >
+              <Text
+                style={[
+                  styles.statusButtonText,
+                  !formData.isStudentNew && styles.statusButtonTextActive
+                ]}
+              >
+                Transfer Student
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <TouchableOpacity
@@ -393,7 +502,55 @@ const styles = StyleSheet.create({
   datePickerText: {
     fontSize: 16,
     color: '#1f2937',
-  }
+  },
+  bloodGroupContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  bloodGroupButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#ffffff',
+  },
+  bloodGroupButtonActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  bloodGroupButtonText: {
+    color: '#1f2937',
+    fontSize: 14,
+  },
+  bloodGroupButtonTextActive: {
+    color: '#ffffff',
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  statusButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+  },
+  statusButtonActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  statusButtonText: {
+    color: '#1f2937',
+    fontSize: 16,
+  },
+  statusButtonTextActive: {
+    color: '#ffffff',
+  },
 });
 
 export default AddStudentScreen;

@@ -65,6 +65,8 @@ const ClassSectionsScreen = () => {
           SecureStore.getItemAsync('userData')
         ]);
 
+        console.log(classesData, userInfoStr);
+
         if (classesData && userInfoStr) {
           const userInfo: UserInfo = JSON.parse(userInfoStr);
           setUserInfo(userInfo);
