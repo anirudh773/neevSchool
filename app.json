@@ -2,7 +2,7 @@
   "expo": {
     "name": "NeevLearn",
     "slug": "NeevLearn",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
@@ -19,7 +19,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.neevlearn.app",
-      "versionCode": 4,
+      "versionCode": 5,
       "usesCleartextTraffic": true
     },
     "web": {
