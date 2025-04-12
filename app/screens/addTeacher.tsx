@@ -11,10 +11,10 @@ import {
   Text,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, TextInput } from 'react-native-paper';
+import { ActivityIndicator, TextInput, Chip } from 'react-native-paper';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import { useRouter } from 'expo-router';
-import { DocumentPickerOptions, getDocumentAsync } from 'expo-document-picker';
+import {  getDocumentAsync } from 'expo-document-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as SecureStore from 'expo-secure-store';
 import { storage } from '../../firebaseConfig'
@@ -37,7 +37,7 @@ type TeacherData = {
   email: string;
   resumeUrl: string;
   primarySubjectId: number;
-  substituteSubjectId: number;
+  substituteSubjectId: number[]; // Changed to array
   qualifications: number;
   joiningDate: string;
   schoolId: number;
@@ -91,7 +91,7 @@ const RegisterTeacher: React.FC = () => {
     email: '',
     resumeUrl: '',
     primarySubjectId: 1,
-    substituteSubjectId: 2,
+    substituteSubjectId: [], // Initialize as empty array
     qualifications: 1,
     joiningDate: new Date().toISOString().split('T')[0],
     schoolId: 1,
@@ -179,6 +179,34 @@ const RegisterTeacher: React.FC = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // Function to toggle a subject in the substituteSubjectId array
+  const toggleSubstituteSubject = (subjectId: number) => {
+    setFormData(prev => {
+      // Check if the subject is already selected
+      if (prev.substituteSubjectId.includes(subjectId)) {
+        // Remove the subject
+        return {
+          ...prev,
+          substituteSubjectId: prev.substituteSubjectId.filter(id => id !== subjectId)
+        };
+      } else {
+        // Add the subject
+        return {
+          ...prev,
+          substituteSubjectId: [...prev.substituteSubjectId, subjectId]
+        };
+      }
+    });
+  };
+
+  // Function to remove a substitute subject
+  const removeSubstituteSubject = (subjectId: number) => {
+    setFormData(prev => ({
+      ...prev,
+      substituteSubjectId: prev.substituteSubjectId.filter(id => id !== subjectId)
+    }));
+  };
+
   const validateForm = () => {
     if (!formData.name || !formData.email || !formData.mobileNumber) {
       Alert.alert('Error', 'Please fill in all required fields');
@@ -192,8 +220,12 @@ const RegisterTeacher: React.FC = () => {
       Alert.alert('Error', 'Please enter a valid 10-digit mobile number');
       return false;
     }
-    if (formData.primarySubjectId === formData.substituteSubjectId) {
-      Alert.alert('Error', 'Primary and Substitute subjects cannot be the same');
+    if (formData.substituteSubjectId.length === 0) {
+      Alert.alert('Error', 'Please select at least one substitute subject');
+      return false;
+    }
+    if (formData.substituteSubjectId.includes(formData.primarySubjectId)) {
+      Alert.alert('Error', 'Primary subject cannot be in substitute subjects');
       return false;
     }
     return true;
@@ -298,12 +330,16 @@ const RegisterTeacher: React.FC = () => {
     visible, 
     onClose, 
     onSelect, 
-    title 
+    title,
+    multiSelect = false,
+    selectedSubjects = [],
   }: { 
     visible: boolean; 
     onClose: () => void; 
-    onSelect: (id: number) => void;
+    onSelect?: (id: number) => void;
     title: string;
+    multiSelect?: boolean;
+    selectedSubjects?: number[];
   }) => (
     <Modal
       visible={visible}
@@ -319,21 +355,69 @@ const RegisterTeacher: React.FC = () => {
               <FontAwesome name="times" size={24} color="#666" />
             </TouchableOpacity>
           </View>
+          
+          {multiSelect && (
+            <View style={styles.modalSubHeader}>
+              <Text style={styles.modalSubtitle}>
+                Selected: {selectedSubjects.length} subject(s)
+              </Text>
+              {selectedSubjects.length > 0 && (
+                <TouchableOpacity 
+                  onPress={() => {
+                    setFormData(prev => ({...prev, substituteSubjectId: []}));
+                  }}
+                  style={styles.clearSelectionButton}
+                >
+                  <Text style={styles.clearSelectionText}>Clear All</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+          
           <ScrollView style={styles.modalScroll}>
             {subjects.map(subject => (
               <TouchableOpacity
                 key={subject.id}
-                style={styles.modalItem}
+                style={[
+                  styles.modalItem, 
+                  multiSelect && selectedSubjects.includes(subject.id) && styles.selectedItem
+                ]}
                 onPress={() => {
-                  onSelect(subject.id);
-                  onClose();
+                  if (multiSelect) {
+                    toggleSubstituteSubject(subject.id);
+                  } else {
+                    if (onSelect) onSelect(subject.id);
+                    onClose();
+                  }
                 }}
               >
-                <Text style={styles.modalItemText}>{subject.name}</Text>
-                <FontAwesome name="chevron-right" size={16} color="#666" />
+                <Text style={[
+                  styles.modalItemText,
+                  multiSelect && selectedSubjects.includes(subject.id) && styles.selectedItemText
+                ]}>
+                  {subject.name}
+                </Text>
+                {multiSelect ? (
+                  selectedSubjects.includes(subject.id) ? 
+                    <FontAwesome name="check-circle" size={20} color="#007AFF" /> :
+                    <FontAwesome name="circle-o" size={20} color="#666" />
+                ) : (
+                  <FontAwesome name="chevron-right" size={16} color="#666" />
+                )}
               </TouchableOpacity>
             ))}
           </ScrollView>
+          
+          {multiSelect && (
+            <View style={styles.modalFooter}>
+              <TouchableOpacity 
+                style={styles.modalDoneButton}
+                onPress={onClose}
+              >
+                <Text style={styles.modalDoneButtonText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </View>
     </Modal>
@@ -505,14 +589,6 @@ const RegisterTeacher: React.FC = () => {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            {/* <TouchableOpacity 
-              onPress={() => router.push('/(tab)')}
-              style={styles.backButton}
-            >
-              <FontAwesome name="arrow-left" size={24} color="#000" />
-            </TouchableOpacity> */}
-            {/* <Text style={styles.headerText}>Teacher Registration</Text> */}
-
             <TouchableOpacity onPress={() => router.push('/screens/listTeacherss')}>
               <FontAwesome name="list" size={24} color="#000" />
               <Text>View All</Text>
@@ -599,8 +675,10 @@ const RegisterTeacher: React.FC = () => {
             style={styles.dropdownContainer}
           >
             <TextInput
-              label="Substitute Subject"
-              value={subjects.find(s => s.id === formData.substituteSubjectId)?.name}
+              label="Substitute Subjects"
+              value={formData.substituteSubjectId.length > 0 
+                ? `${formData.substituteSubjectId.length} subject(s) selected` 
+                : 'Select subjects'}
               editable={false}
               style={styles.input}
               mode="outlined"
@@ -612,6 +690,25 @@ const RegisterTeacher: React.FC = () => {
               }
             />
           </TouchableOpacity>
+
+          {/* Display selected substitute subjects as chips */}
+          {formData.substituteSubjectId.length > 0 && (
+            <View style={styles.chipsContainer}>
+              {formData.substituteSubjectId.map(subjectId => {
+                const subject = subjects.find(s => s.id === subjectId);
+                return subject ? (
+                  <Chip
+                    key={subject.id}
+                    style={styles.chip}
+                    onClose={() => removeSubstituteSubject(subject.id)}
+                    mode="outlined"
+                  >
+                    {subject.name}
+                  </Chip>
+                ) : null;
+              })}
+            </View>
+          )}
 
           <TouchableOpacity 
             onPress={() => setShowQualificationPicker(true)}
@@ -715,8 +812,9 @@ const RegisterTeacher: React.FC = () => {
       <SubjectPickerModal 
         visible={showSubstituteSubjectPicker}
         onClose={() => setShowSubstituteSubjectPicker(false)}
-        onSelect={(id) => handleInputChange('substituteSubjectId', id)}
-        title="Select Substitute Subject"
+        title="Select Substitute Subjects"
+        multiSelect
+        selectedSubjects={formData.substituteSubjectId}
       />
 
       <QualificationPickerModal />
@@ -754,6 +852,14 @@ const styles = StyleSheet.create({
   input: {
     marginBottom: 16,
     backgroundColor: '#fff',
+  },
+  chipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 16,
+  },
+  chip: {
+    margin: 4,
   },
   uploadButton: {
     flexDirection: 'row',
@@ -796,6 +902,26 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     maxHeight: '80%',
   },
+  modalSubHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+  },
+  clearSelectionButton: {
+    padding: 4,
+  },
+  clearSelectionText: {
+    color: '#FF3B30',
+    fontSize: 14,
+  },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -834,6 +960,22 @@ const styles = StyleSheet.create({
   selectedItemText: {
     color: '#007AFF',
     fontWeight: '500',
+  },
+  modalFooter: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  modalDoneButton: {
+    backgroundColor: '#007AFF',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalDoneButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,
@@ -975,5 +1117,4 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 });
-
 export default RegisterTeacher;
