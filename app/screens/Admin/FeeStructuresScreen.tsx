@@ -364,7 +364,6 @@ const FeeStructuresScreen = () => {
               );
 
               const result = await response.json();
-              console.log(result);
               if (result.success) {
                 setFeeStructures(prev => prev.filter(fee => fee.id !== id));
                 Alert.alert('Success', 'Fee structure deleted successfully');

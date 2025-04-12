@@ -179,7 +179,6 @@ const LoginPage = () => {
         }
         
         if (finalStatus !== 'granted') {
-          console.log('Failed to get push token for push notification!');
           return null;
         }
 

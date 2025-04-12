@@ -121,7 +121,6 @@ const Landing: React.FC = () => {
         const token = await SecureStore.getItemAsync('userToken');
 
         if (!token) {
-          console.log('No token found');
           router.replace('/screens/LoginPage');
           return;
         }
@@ -144,7 +143,6 @@ const Landing: React.FC = () => {
         const missingKeys = keyResults.filter(result => !result.exists);
         
         if (missingKeys.length > 0) {
-          console.log('Missing keys:', missingKeys);
           router.replace('/screens/LoginPage');
         } else {
           router.replace('/(tab)');

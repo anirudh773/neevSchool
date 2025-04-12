@@ -128,7 +128,6 @@ const ProfileScreen: React.FC = () => {
       if (!profile?.schoolId) {
         throw new Error('User ID not found');
       }
-      console.log(profile);
 
       const response = await fetch(`https://neevschool.sbs/school/updateProfilePhoto`, {
         method: 'PUT',

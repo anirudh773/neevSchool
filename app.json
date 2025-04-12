@@ -2,7 +2,7 @@
   "expo": {
     "name": "St. Thomas",
     "slug": "StThomasmission",
-    "version": "1.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
@@ -19,7 +19,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.stThomasmission.app",
-      "versionCode": 2,
+      "versionCode": 5,
       "usesCleartextTraffic": true
     },
     "web": {
