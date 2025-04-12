@@ -1206,3 +1206,4 @@ const styles = StyleSheet.create<Style>({
     marginLeft: 8,
   }
 });
+export default SubmitPaymentScreen;

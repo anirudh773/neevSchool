@@ -52,7 +52,7 @@ export default function RootLayout() {
 
       <Stack.Screen name="screens/Cashier/SectionSelectionScreen" options={{title: 'New Admission', headerShown: true}} />
       <Stack.Screen name="screens/Cashier/PaymentStudentScreen" options={{title: 'Fee Submission', headerShown: true}} />
-      <Stack.Screen name="screens/Cashier/SubmitPaymentScreen" options={{title: 'Fee Submission', headerShown: false}} />
+      <Stack.Screen name="screens/Cashier/SubmitPaymentScreen" options={{title: 'Fee Payment', headerShown: false}} />
 
       <Stack.Screen name="screens/Admin/FeeManagementScreen" options={{title: 'Fee Management', headerShown: true}} />
       <Stack.Screen name="screens/Admin/FeeMasterScreen" options={{title: 'Add fee stucture', headerShown: false}} />
