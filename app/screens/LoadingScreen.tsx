@@ -38,7 +38,6 @@ const LoadingScreen = () => {
         const missingKeys = keyResults.filter(result => !result.exists);
         
         if (missingKeys.length > 0) {
-          console.log('Missing required keys:', missingKeys.map(k => k.key).join(', '));
           // Navigate to login screen if any key is missing
           router.replace('/screens/LoginPage');
         } else {

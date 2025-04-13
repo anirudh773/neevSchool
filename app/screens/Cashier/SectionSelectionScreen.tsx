@@ -14,10 +14,11 @@ import {
   TextInput,
   InteractionManager,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
+import YouTubeLink from 'components/YouTubeLink';
 
 // Get device width for responsive sizing
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -119,6 +120,8 @@ const EmptyList = memo(({ searchQuery }: EmptyListProps) => (
 ));
 
 const SectionSelectionScreen = () => {
+  const router = useRouter();
+  const { youtubeLink } = useLocalSearchParams();
   // Simple, declarative states that drive UI
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
@@ -134,7 +137,6 @@ const SectionSelectionScreen = () => {
   
   // Component lifecycle
   const isMounted = useRef(true);
-  const router = useRouter();
 
   // Simple lifecycle cleanup
   useEffect(() => {
@@ -387,7 +389,14 @@ const SectionSelectionScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.classSelectionContainer}>
+      <View style={styles.xyz}>
         <Text style={styles.sectionLabel}>Select Class</Text>
+        {youtubeLink && typeof youtubeLink === 'string' && (
+              <>
+              <YouTubeLink url={youtubeLink} size={20} />
+              </>
+        )}
+        </View>
         {loading && (!classes || classes.length === 0) ? (
           <View style={[styles.loaderContainer, styles.smallLoader]}>
             <ActivityIndicator size="small" color="#4A90E2" />
@@ -545,6 +554,11 @@ const SectionSelectionScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  xyz: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',

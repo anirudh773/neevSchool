@@ -14,9 +14,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import * as SecureStore from 'expo-secure-store';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useFocusEffect } from '@react-navigation/native';
+import YouTubeLink from 'components/YouTubeLink';
 
 // Type Definitions
 interface Section {
@@ -87,6 +88,7 @@ interface UserInfo {
 
 const CheckAttendence: React.FC = () => {
 	const router = useRouter();
+	const { youtubeLink } = useLocalSearchParams();
 	const [classes, setClasses] = useState<ClassData[]>([]);
 	const [selectedClass, setSelectedClass] = useState<ClassData | null>(null);
 	const [selectedSection, setSelectedSection] = useState<Section | null>(null);
@@ -540,6 +542,10 @@ const renderDateSelection = () => (
 							<Text style={styles.errorText}>{error}</Text>
 						</View>
 					)}
+
+{youtubeLink && typeof youtubeLink === 'string' && (
+              <YouTubeLink url={youtubeLink} size={20} />
+            )}
 	
 					<View style={[styles.selectors, { flexDirection: isTablet ? 'row' : 'column' }]}>
 						<TouchableOpacity

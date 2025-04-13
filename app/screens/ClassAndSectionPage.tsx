@@ -11,9 +11,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as SecureStore from 'expo-secure-store';
+import YouTubeLink from 'components/YouTubeLink';
 
 interface Section {
   id: number;
@@ -50,6 +51,7 @@ const cardWidth = (width - 60) / 2; // 40 = horizontal padding (16 * 2) + gap be
 
 const ClassSectionsScreen = () => {
   const router = useRouter();
+  const { youtubeLink } = useLocalSearchParams();
   const [selectedClass, setSelectedClass] = useState<ClassData | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [classes, setClasses] = useState<ClassData[]>([]);
@@ -64,8 +66,6 @@ const ClassSectionsScreen = () => {
           SecureStore.getItemAsync('schoolClasses'),
           SecureStore.getItemAsync('userData')
         ]);
-
-        console.log(classesData, userInfoStr);
 
         if (classesData && userInfoStr) {
           const userInfo: UserInfo = JSON.parse(userInfoStr);
@@ -225,6 +225,11 @@ const ClassSectionsScreen = () => {
 
         <View style={styles.header}>
           <Text style={styles.subtitle}>Select a class to view sections</Text>
+          {youtubeLink && typeof youtubeLink === 'string' && (
+              <>
+              <YouTubeLink url={youtubeLink} size={20} />
+              </>
+            )}
         </View>
         
         <View style={styles.gridContainer}>
@@ -261,6 +266,9 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 24,
   },
   title: {

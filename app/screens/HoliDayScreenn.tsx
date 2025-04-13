@@ -16,6 +16,8 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as SecureStore from 'expo-secure-store';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import YouTubeLink from 'components/YouTubeLink';
 
 // Types
 interface Holiday {
@@ -74,6 +76,7 @@ const HolidayItem = memo(({ item, onEdit, onDelete, formatDate }: HolidayItemPro
 });
 
 const HolidayList = () => {
+  const { youtubeLink } = useLocalSearchParams();
   const { width, height } = useWindowDimensions();
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [isAddModalVisible, setAddModalVisible] = useState<boolean>(false);
@@ -363,7 +366,12 @@ const HolidayList = () => {
 
   return (
     <View style={styles.container}>
+      <View style={styles.xyz}>
       <Text style={styles.header}>Holiday Management</Text>
+      {youtubeLink && typeof youtubeLink === 'string' && (
+              <YouTubeLink url={youtubeLink} size={20} />
+            )}
+      </View>
       
       {loading && !refreshing ? (
         <View style={styles.loadingContainer}>
@@ -428,6 +436,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f6fa',
     paddingTop: Platform.OS === 'ios' ? 50 : 20,
   },
+  xyz: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -444,7 +457,7 @@ const styles = StyleSheet.create({
     paddingBottom: 80,
   },
   header: {
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: '800',
     color: '#2c3e50',
     textAlign: 'center',

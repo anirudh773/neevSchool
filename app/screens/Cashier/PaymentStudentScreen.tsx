@@ -14,10 +14,11 @@ import {
   TextInput,
   InteractionManager,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
+import YouTubeLink from 'components/YouTubeLink';
 
 // Get device width for responsive sizing
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -105,6 +106,7 @@ const PaymentStudentScreen = () => {
   // Refs
   const isMounted = useRef(true);
   const router = useRouter();
+  const { youtubeLink } = useLocalSearchParams();
 
   // Cleanup on unmount
   useEffect(() => {
@@ -259,15 +261,19 @@ const PaymentStudentScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+      {/* <View style={styles.header}>
         <Text style={styles.title}>Select Class</Text>
-        <Text style={styles.subtitle}>
-          Select a class to view students
-        </Text>
+
+      </View> */}
+
+      <View style={styles.xyz}>
+      <Text style={styles.title}>Select Class</Text>
+      {youtubeLink && typeof youtubeLink === 'string' && (
+              <YouTubeLink url={youtubeLink} size={20} />
+            )}
       </View>
 
       <View style={styles.classSelectionContainer}>
-        <Text style={styles.sectionLabel}>Select Class</Text>
         {loading && (!classes || classes.length === 0) ? (
           <View style={[styles.loaderContainer, styles.smallLoader]}>
             <ActivityIndicator size="small" color="#4A90E2" />
@@ -389,6 +395,11 @@ const PaymentStudentScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  xyz: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',

@@ -79,7 +79,12 @@ const HomeScreen = () => {
 
   const handleFeaturePress = (feature: any) => {
     if (feature.navigation) {
-      router.push(feature.navigation);
+      router.push({
+        pathname: feature.navigation,
+        params: { 
+          youtubeLink: feature.youtubeLink || false  // Pass the YouTube link as a parameter
+        }
+      });
     } else {
       Alert.alert('Coming Soon', `${feature.featueName} feature will be available soon!`);
     }
