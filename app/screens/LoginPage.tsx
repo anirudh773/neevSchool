@@ -246,11 +246,6 @@ const LoginPage = () => {
         throw new Error('Your Login userid or password is incorrect');
       }
 
-      // Check if user is associated with the correct school
-      if (data.userInfo?.schoolId !== 1) {
-        throw new Error('You are not associated with this school. Please contact school.');
-      }
-
       // Store tokens and user data securely
       const storagePromises = [
         SecureStore.setItemAsync('userToken', data.token),
@@ -315,7 +310,7 @@ const LoginPage = () => {
             style={styles.logo}
           />
           <Text style={styles.companyName}>Neev Learn Group</Text>
-          <Text style={styles.location}>Jaunpur</Text>
+          <Text style={styles.location}>Gurugram</Text>
         </View>
 
         <View style={styles.inputContainer}>
