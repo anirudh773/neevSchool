@@ -3,10 +3,11 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal, Alert } fr
 import { Card, Button, Surface, ActivityIndicator } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { Animated } from 'react-native';
 import ExamScheduleCard from '@/components/exam/ExamScheduleCard';
+import YouTubeLink from 'components/YouTubeLink';
 
 interface ExamStats {
   ongoingExams: number;
@@ -57,6 +58,7 @@ interface Section {
 
 const ExamDashboardScreen: React.FC = () => {
   const router = useRouter();
+  const { youtubeLink } = useLocalSearchParams();
 
   // States
   const [classes, setClasses] = useState<Class[]>([]);
@@ -315,7 +317,11 @@ const ExamDashboardScreen: React.FC = () => {
         <Text style={styles.cardTitle}>Exam Management</Text>
         <Text style={styles.cardSubtitle}>Manage class test and exams</Text>
       </View>
-    </View>
+
+      {youtubeLink && typeof youtubeLink === 'string' && (
+              <YouTubeLink url={youtubeLink} size={20} />
+            )}
+      </View>
   );
 
   return (

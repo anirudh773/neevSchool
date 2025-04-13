@@ -14,12 +14,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import * as SecureStore from 'expo-secure-store';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import YouTubeLink from 'components/YouTubeLink';
 
 const { width } = Dimensions.get('window');
 
 const TimeTableManager = () => {
     const router = useRouter();
+    const { youtubeLink } = useLocalSearchParams();
   // State for data
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -444,10 +446,15 @@ const TimeTableManager = () => {
             <FontAwesome name="arrow-left" size={20} color="#64748b" />
           </TouchableOpacity> */}
           
-          <View style={styles.headerContent}>
-            <Text style={styles.cardTitle}>Timetable Management</Text>
-            <Text style={styles.cardSubtitle}>Assign teacher to your class</Text>
-          </View>
+          
+            <View style={styles.headerContent}>
+              <Text style={styles.cardTitle}>Timetable Management</Text>
+              <Text style={styles.cardSubtitle}>Assign teacher to your class</Text>
+            </View>
+            {youtubeLink && typeof youtubeLink === 'string' && (
+                <YouTubeLink url={youtubeLink} size={20} />
+            )}
+
 
           {selectedClass && selectedSection && (
             <TouchableOpacity

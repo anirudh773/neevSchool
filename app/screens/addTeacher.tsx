@@ -13,12 +13,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator, TextInput, Chip } from 'react-native-paper';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import {  getDocumentAsync } from 'expo-document-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as SecureStore from 'expo-secure-store';
 import { storage } from '../../firebaseConfig'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import YouTubeLink from 'components/YouTubeLink';
 
 interface Section {
   id: number;
@@ -65,6 +66,7 @@ const truncateFileName = (fileName: string, maxLength: number = 25) => {
 
 const RegisterTeacher: React.FC = () => {
   const router = useRouter();
+  const { youtubeLink } = useLocalSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showPrimarySubjectPicker, setShowPrimarySubjectPicker] = useState(false);
@@ -593,6 +595,11 @@ const RegisterTeacher: React.FC = () => {
               <FontAwesome name="list" size={24} color="#000" />
               <Text>View All</Text>
             </TouchableOpacity>
+            {youtubeLink && typeof youtubeLink === 'string' && (
+              <>
+              <YouTubeLink url={youtubeLink} size={20} />
+              </>
+            )}
           </View>
 
           <TextInput
@@ -839,6 +846,8 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-between'
   },
   backButton: {
     padding: 8,
