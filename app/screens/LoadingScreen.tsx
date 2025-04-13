@@ -66,7 +66,7 @@ const LoadingScreen = () => {
         style={styles.logo}
         resizeMode="contain"
       />
-      <Text style={styles.title}>Neev Learn Private Limited</Text>
+      <Text style={styles.title}>Neev Learn Group</Text>
       <Text style={styles.subtitle}>Loading your experience...</Text>
       <ActivityIndicator 
         size="large" 
