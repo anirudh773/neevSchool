@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   ScrollView,
@@ -11,6 +11,7 @@ import {
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as SecureStore from 'expo-secure-store';
 
 const AddStudentScreen = () => {
   const router = useRouter();
@@ -18,6 +19,25 @@ const AddStudentScreen = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [datePickerMode, setDatePickerMode] = useState<'dob' | 'admission'>('dob');
   const [loading, setLoading] = useState(false);
+  const [schoolId, setSchoolId] = useState<any>(null);
+
+  useEffect(() => {
+    const initializeUserData = async () => {
+        try {
+            const userDataStr = await SecureStore.getItemAsync('userData');
+            if (userDataStr) {
+                const userData = JSON.parse(userDataStr);
+                if (userData && userData.schoolId) {
+                    setSchoolId(userData.schoolId);
+                }
+            }
+        } catch (error) {
+            console.error('Error initializing user data:', error);
+        }
+    };
+    
+    initializeUserData();
+}, []);
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -65,6 +85,8 @@ const AddStudentScreen = () => {
   };
 
   const handleSubmit = async () => {
+
+    if(!schoolId) return;
     setLoading(true)
     if (!formData.firstName || !formData.lastName || !formData.aadhaarNumber) {
       Alert.alert('Error', 'Name and Aadhaar Number are required');
@@ -81,6 +103,7 @@ const AddStudentScreen = () => {
         height: formData.height || '',
         weight: formData.weight || '',
         bloodGroup: formData.bloodGroup || null,
+        schoolId: schoolId
       };
       const response = await fetch('https://neevschool.sbs/school/addStudent', {
         method: 'POST',
@@ -118,6 +141,7 @@ const AddStudentScreen = () => {
                   motherName: '',
                   isStudentNew: true
                 });
+                setLoading(false)
               },
               style: 'default'
             }

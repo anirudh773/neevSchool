@@ -649,7 +649,7 @@ const TeacherListing: React.FC = () => {
     const [editLoading, setEditLoading] = useState<boolean>(false);
     const [selectedClassSection, setSelectedClassSection] = useState<SelectedClassSection | null>(null);
     const [subjects, setSubjects] = useState<Subject[]>([]);
-    const [schoolId, setSchoolId] = useState<number>(1);
+    const [schoolId, setSchoolId] = useState<any>(null);
     const [classFilter, setClassFilter] = useState<number | null>(null);
     const [showClassFilterSelect, setShowClassFilterSelect] = useState<boolean>(false);
 
@@ -673,9 +673,12 @@ const TeacherListing: React.FC = () => {
 
     const fetchTeachers = async () => {
         try {
+            console.log(schoolId);
+            if(!schoolId) return;
             setLoading(true);
             const response = await fetch(`https://neevschool.sbs/school/getTeachersBySchoolId?schoolId=${schoolId}`);
             const data = await response.json();
+            console.log(data)
             if (data.success) {
                 setTeachers(data.data);
             } else {
