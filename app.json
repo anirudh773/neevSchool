@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "NeevLearn",
-    "slug": "NeevLearn",
-    "version": "1.1.0",
+    "name": "St. Thomas",
+    "slug": "StThomasmission",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
@@ -11,14 +11,14 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.neevlearn.app"
+      "bundleIdentifier": "com.stThomasmission.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.neevlearn.app",
+      "package": "com.stThomasmission.app",
       "versionCode": 5,
       "usesCleartextTraffic": true
     },
@@ -54,15 +54,18 @@
         }
       ]
     ],
-    "extra": {
-      "eas": {
-        "projectId": "5f60753c-7b66-4fb8-872c-b6172aea6cc6"
-      }
-    },
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "d597a7c6-e4d9-42b1-ab3e-27eea953624e"
+      }
     }
   }
 }

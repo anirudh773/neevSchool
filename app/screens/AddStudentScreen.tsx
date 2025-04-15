@@ -88,8 +88,8 @@ const AddStudentScreen = () => {
 
     if(!schoolId) return;
     setLoading(true)
-    if (!formData.firstName || !formData.lastName || !formData.aadhaarNumber) {
-      Alert.alert('Error', 'Name and Aadhaar Number are required');
+    if (!formData.firstName || !formData.parentName || !formData.motherName || !formData.parentContact) {
+      Alert.alert('Error', 'Student Name, Parent Name, Mother Name, Parent contact and Email are imporant');
       setLoading(false);
       return;
     }
