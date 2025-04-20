@@ -19,7 +19,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.stThomasmission.app",
-      "versionCode": 5,
+      "versionCode": 7,
       "usesCleartextTraffic": true
     },
     "web": {

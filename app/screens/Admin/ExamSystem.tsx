@@ -127,7 +127,6 @@ const ExamDashboardScreen: React.FC = () => {
       if (!userData.schoolId) {
         throw new Error('School ID not found');
       }
-      console.log(userData)
 
       const response = await fetch(
         `https://neevschool.sbs/school/getExamMasterData?schoolId=${userData.schoolId}`,

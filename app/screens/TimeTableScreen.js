@@ -383,12 +383,10 @@ const TimeTableManager = () => {
     }
   };
 
-  // Add this function to filter teachers based on selected subject
+  // Modified function: Instead of filtering teachers by subject, return all teachers
   const getTeachersForSubject = (subjectId) => {
-    return teachers.filter(teacher => 
-      teacher.primarySubjectId === subjectId || 
-      teacher.substituteSubjectId === subjectId
-    );
+    // Return all teachers instead of filtering
+    return teachers;
   };
 
   // Add a loading overlay component
@@ -717,7 +715,9 @@ const TimeTableManager = () => {
                         <Text style={styles.teacherItemSubject}>
                           {teacher.primarySubjectId === cellSubjects[`${selectedCell.day}-${selectedCell.period}-${selectedClass?.id}-${selectedSection?.id}`]?.id 
                             ? 'Primary Subject'
-                            : 'Substitute Subject'
+                            : teacher.substituteSubjectId === cellSubjects[`${selectedCell.day}-${selectedCell.period}-${selectedClass?.id}-${selectedSection?.id}`]?.id
+                            ? 'Substitute Subject'
+                            : 'Other Subject'
                           }
                         </Text>
                       </TouchableOpacity>

@@ -673,12 +673,10 @@ const TeacherListing: React.FC = () => {
 
     const fetchTeachers = async () => {
         try {
-            console.log(schoolId);
             if(!schoolId) return;
             setLoading(true);
             const response = await fetch(`https://neevschool.sbs/school/getTeachersBySchoolId?schoolId=${schoolId}`);
             const data = await response.json();
-            console.log(data)
             if (data.success) {
                 setTeachers(data.data);
             } else {
