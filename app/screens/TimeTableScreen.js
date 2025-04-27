@@ -99,8 +99,13 @@ const TimeTableManager = () => {
   const fetchExistingTimetable = async (classId, sectionId) => {
     try {
       setIsLoading(prev => ({ ...prev, timetable: true }));
+      // Get schoolId dynamically from SecureStore
+      const userData = await SecureStore.getItemAsync('userData');
+      if (!userData) return;
+      const { schoolId } = JSON.parse(userData);
+
       const response = await fetch(
-        `https://neevschool.sbs/school/getSchoolTimetable?schoolId=1&classId=${classId}&sectionId=${sectionId}`
+        `https://neevschool.sbs/school/getSchoolTimetable?schoolId=${schoolId}&classId=${classId}&sectionId=${sectionId}`
       );
       const result = await response.json();
       
