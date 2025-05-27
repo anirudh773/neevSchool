@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,13 @@ import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
+import { Ionicons } from '@expo/vector-icons';
+
+interface LoginRequest {
+  userId: string;
+  password: string;
+  loginAsParent?: boolean;
+}
 
 // Configure notification handler
 Notifications.setNotificationHandler({
@@ -146,6 +153,18 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.7,
   },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    alignSelf: 'flex-start',
+  },
+  checkboxLabel: {
+    marginLeft: 8,
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
 });
 
 const LoginPage = () => {
@@ -153,6 +172,7 @@ const LoginPage = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loginAsStudentParent, setLoginAsStudentParent] = useState(false);
   const router = useRouter();
 
   // Function to register for push notifications
@@ -228,15 +248,21 @@ const LoginPage = () => {
     try {
       // Get and store push token
       const pushToken = await registerForPushNotificationsAsync();
+
+      let obj: LoginRequest = {
+        userId, 
+        password
+      }
+
+      if(loginAsStudentParent) {
+        obj.loginAsParent = true
+      }
       
       // API call to login endpoint
       const response = await fetch('https://neevschool.sbs/school/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId, 
-          password
-        }),
+        body: JSON.stringify(obj),
       });
 
       // Handle non-JSON response safely
@@ -262,7 +288,7 @@ const LoginPage = () => {
       // Role-specific storage logic
       if (data.userInfo?.role === 2) {
         await SecureStore.setItemAsync('schoolClasses', JSON.stringify(data.teacherClasses));
-      } else if ([1, 3, 4].includes(data.userInfo?.role)) {
+      } else if ([1, 4].includes(data.userInfo?.role)) {
         await SecureStore.setItemAsync('schoolClasses', JSON.stringify(data.classes));
       }
 
@@ -320,7 +346,6 @@ const LoginPage = () => {
             placeholderTextColor="#aaa"
             value={userId}
             onChangeText={setUserId}
-            keyboardType="number-pad"
           />
           <TextInput
             style={styles.input}
@@ -336,6 +361,19 @@ const LoginPage = () => {
             </Text>
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          style={styles.checkboxContainer}
+          onPress={() => setLoginAsStudentParent(prev => !prev)}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name={loginAsStudentParent ? "checkbox" : "square-outline"}
+            size={24}
+            color="#007AFF"
+          />
+          <Text style={styles.checkboxLabel}>Login as Student/Parent</Text>
+        </TouchableOpacity>
 
         <View style={styles.buttonContainer}>
           <TouchableOpacity 

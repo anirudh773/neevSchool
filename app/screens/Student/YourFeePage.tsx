@@ -13,10 +13,89 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import * as SecureStore from 'expo-secure-store';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // TypeScript interfaces
+interface FeeSubmission {
+  // Add submission details if needed
+}
+
+interface FeeMonth {
+  month: string;
+  amount: number;
+  paid: number;
+  status: string;
+  dueDate: string | null;
+  submissions: FeeSubmission[];
+  classFeeId: number;
+}
+
+interface FeeType {
+  id: number;
+  name: string;
+  frequency: string;
+  frequencyId: number;
+  totalAmount: number;
+  totalPaid: number;
+  totalLateFee: number;
+  totalDiscount: number;
+  balance: number;
+  status: string;
+  details: {
+    feeId: number;
+    month: string;
+    dueDate: string;
+    amount: number;
+    gracePeriod: number;
+    submissions: FeeSubmission[];
+  }[];
+  months: FeeMonth[];
+}
+
+interface MonthlySummary {
+  amount: number;
+  paid: number;
+  balance: number;
+  status: string;
+}
+
+interface FeeDetails {
+  studentDetails: {
+    id: number;
+    name: string;
+    class: string;
+    section: string;
+  };
+  academicYear: {
+    id: number;
+    name: string;
+    startDate: string;
+    endDate: string;
+  };
+  feeTypes: FeeType[];
+  monthlySummary: {
+    [key: string]: MonthlySummary;
+  };
+  summary: {
+    totalFees: number;
+    totalPaid: number;
+    totalLateFee: number;
+    totalDiscount: number;
+    totalBalance: number;
+    overallStatus: string;
+  };
+}
+
+type TabType = 'current' | 'pending' | 'paid';
+
+// Add this after the existing imports
+const monthNames = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
 interface Fee {
   classFeeId: number;
   feeTypeId: number;
@@ -26,62 +105,13 @@ interface Fee {
   frequency: string;
   month?: number;
   year: number;
+  status?: string;
+  dueDate?: string | null;
 }
-
-interface FeeSection {
-  fees: Fee[];
-  total: number;
-}
-
-interface PendingFees {
-  currentMonth: Fee[];
-  otherPending: Fee[];
-  total: number;
-}
-
-interface FeeDetails {
-  paidFees: FeeSection;
-  pendingFees: PendingFees;
-  upcomingFees: FeeSection;
-}
-
-type TabType = 'current' | 'pending' | 'upcoming';
-
-// Add this after the existing imports
-const monthNames = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
-];
-
-// Mock data with proper typing
-const mockFeeData: FeeDetails = {
-  paidFees: {
-    fees: [
-      { classFeeId: 1, feeTypeId: 1, feeTypeName: 'Tuition Fee', amount: '5000', actualAmount: '5000', frequency: 'Monthly', month: 1, year: 2023 },
-      { classFeeId: 2, feeTypeId: 2, feeTypeName: 'Development Fee', amount: '3000', actualAmount: '3000', frequency: 'Monthly', month: 2, year: 2023 },
-      { classFeeId: 3, feeTypeId: 3, feeTypeName: 'Library Fee', amount: '2500', actualAmount: '2500', frequency: 'Monthly', month: 3, year: 2023 },
-    ],
-    total: 10500
-  },
-  pendingFees: {
-    currentMonth: [
-      { classFeeId: 4, feeTypeId: 1, feeTypeName: 'Tuition Fee', amount: '5000', actualAmount: '5000', frequency: 'Monthly', month: 4, year: 2023 },
-      { classFeeId: 5, feeTypeId: 2, feeTypeName: 'Computer Fee', amount: '3000', actualAmount: '3000', frequency: 'Monthly', month: 5, year: 2023 },
-    ],
-    otherPending: [],
-    total: 8000
-  },
-  upcomingFees: {
-    fees: [
-      { classFeeId: 6, feeTypeId: 1, feeTypeName: 'Monthly Fee', amount: '3000', actualAmount: '3000', frequency: 'Monthly', month: 5, year: 2023 },
-    ],
-    total: 3000
-  }
-};
 
 interface FeeCardProps {
   fee: Fee;
-  type: 'current' | 'pending' | 'upcoming';
+  type: 'current' | 'pending' | 'paid';
 }
 
 // Update the color palette to be more minimal
@@ -93,17 +123,21 @@ const COLORS = {
   textSecondary: '#757575',
   border: '#e0e0e0',
   // Status colors
+  
   current: '#2962ff',
   pending: '#f44336',
-  upcoming: '#00c853',
+  paid: '#00c853',
 };
 
 const FeeCard: React.FC<FeeCardProps> = ({ fee, type }) => {
   const getStatusColor = () => {
+    if (fee.status === 'PAID') return COLORS.paid;
+    if (fee.status === 'PENDING') return COLORS.pending;
     return COLORS[type] || COLORS.current;
   };
 
   const statusColor = getStatusColor();
+  const dueDate = fee.dueDate ? new Date(fee.dueDate).toLocaleDateString() : null;
 
   return (
     <View style={[styles.feeCard, { borderColor: statusColor }]}>
@@ -118,10 +152,15 @@ const FeeCard: React.FC<FeeCardProps> = ({ fee, type }) => {
         <View style={styles.badge}>
           <Text style={[styles.badgeText, { color: statusColor }]}>
             {fee.frequency}
-            {fee.month ? ` • ${monthNames[fee.month - 1]}` : ''}
+            {fee.month !== undefined ? ` • ${monthNames[fee.month - 1]}` : ''}
+            {fee.status ? ` • ${fee.status}` : ''}
           </Text>
         </View>
-        <Text style={styles.year}>{fee.year}</Text>
+        {dueDate && (
+          <Text style={[styles.dueDate, { color: statusColor }]}>
+            Due: {dueDate}
+          </Text>
+        )}
       </View>
     </View>
   );
@@ -141,40 +180,79 @@ const SummaryCard: React.FC<{
   </View>
 );
 
+interface UserInfo {
+  id: number;
+  userId: string;
+  schoolId: number;
+  name: string;
+  role: number;
+  teacherId: number | null;
+}
+
 const YourFeePage: React.FC = () => {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>('current');
   const [feeDetails, setFeeDetails] = useState<FeeDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
 
   const fetchFeeDetails = useCallback(async () => {
     try {
       setLoading(true);
-      const startDate = new Date().toISOString().split('T')[0];
-      const endDate = new Date(new Date().setMonth(new Date().getMonth() + 3))
-        .toISOString().split('T')[0];
+
+      if (!userInfo) {
+        throw new Error('User info not found');
+      }
+
+      const token = await SecureStore.getItemAsync('userToken');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
 
       const response = await fetch(
-        `https://neevschool.sbs/school/getStudentFeeDetails?studentId=1&startDate=${startDate}&endDate=${endDate}`,
+        `https://neevschool.sbs/school/student-fees?student_id=${userInfo.studentClass.studentId}&academic_year_id=1`,
         {
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
         }
       );
 
       const result = await response.json();
-      if (result.success) {
-        setFeeDetails(result.data);
+      if (result.status === 'success') {
+        setFeeDetails(result.data.data);
+      } else {
+        throw new Error(result.message || 'Failed to fetch fee details');
       }
     } catch (error) {
       console.error('Error fetching fee details:', error);
     } finally {
       setLoading(false);
     }
+  }, [userInfo]);
+
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const userDataStr = await SecureStore.getItemAsync('userData');
+        if (userDataStr) {
+          const userData = JSON.parse(userDataStr);
+          setUserInfo(userData);
+        }
+      } catch (error) {
+        console.error('Error loading user data:', error);
+      }
+    };
+
+    loadUserData();
   }, []);
 
   useEffect(() => {
-    fetchFeeDetails();
-  }, [fetchFeeDetails]);
+    if (userInfo) {
+      fetchFeeDetails();
+    }
+  }, [userInfo, fetchFeeDetails]);
 
   const renderContent = () => {
     if (loading || !feeDetails) {
@@ -187,26 +265,77 @@ const YourFeePage: React.FC = () => {
     }
 
     const getContentByTab = () => {
+      const currentMonth = new Date().toLocaleString('default', { month: 'long' });
+      
       switch (activeTab) {
         case 'current':
           return {
             title: 'Current Month Fees',
-            amount: feeDetails.pendingFees.currentMonth.reduce(
-              (sum, fee) => sum + parseFloat(fee.amount), 0
-            ),
-            fees: feeDetails.pendingFees.currentMonth
+            amount: feeDetails.monthlySummary[currentMonth]?.amount || 0,
+            fees: feeDetails.feeTypes
+              .filter(feeType => feeType.months.some(month => month.month === currentMonth))
+              .map(feeType => {
+                const month = feeType.months.find(m => m.month === currentMonth);
+                const isPaid = month?.paid !== undefined && month.paid > 0;
+                return {
+                  classFeeId: month?.classFeeId || 0,
+                  feeTypeId: feeType.id,
+                  feeTypeName: feeType.name,
+                  amount: isPaid ? month?.paid.toString() || '0' : month?.amount.toString() || '0',
+                  actualAmount: month?.amount.toString() || '0',
+                  frequency: feeType.frequency,
+                  month: new Date().getMonth() + 1,
+                  year: new Date().getFullYear(),
+                  status: isPaid ? 'PAID' : 'PENDING',
+                  dueDate: month?.dueDate || null
+                } as Fee;
+              })
           };
         case 'pending':
           return {
             title: 'Total Pending',
-            amount: feeDetails.pendingFees.total,
-            fees: feeDetails.pendingFees.otherPending
+            amount: feeDetails.summary.totalBalance,
+            fees: feeDetails.feeTypes
+              .filter(feeType => feeType.status === 'PENDING')
+              .flatMap(feeType => 
+                feeType.months
+                  .filter(month => month.status === 'PENDING')
+                  .map(month => ({
+                    classFeeId: month.classFeeId,
+                    feeTypeId: feeType.id,
+                    feeTypeName: feeType.name,
+                    amount: month.amount.toString(),
+                    actualAmount: month.amount.toString(),
+                    frequency: feeType.frequency,
+                    month: monthNames.indexOf(month.month) + 1,
+                    year: new Date().getFullYear(),
+                    status: month.status,
+                    dueDate: month.dueDate
+                  } as Fee))
+              )
           };
-        case 'upcoming':
+        case 'paid':
           return {
-            title: 'Upcoming Fees',
-            amount: feeDetails.upcomingFees.total,
-            fees: feeDetails.upcomingFees.fees
+            title: 'Paid Fees',
+            amount: feeDetails.summary.totalPaid,
+            fees: feeDetails.feeTypes
+              .filter(feeType => feeType.totalPaid > 0)
+              .flatMap(feeType => 
+                feeType.months
+                  .filter(month => month.paid > 0)
+                  .map(month => ({
+                    classFeeId: month.classFeeId,
+                    feeTypeId: feeType.id,
+                    feeTypeName: feeType.name,
+                    amount: month.paid.toString(),
+                    actualAmount: month.amount.toString(),
+                    frequency: feeType.frequency,
+                    month: monthNames.indexOf(month.month) + 1,
+                    year: new Date().getFullYear(),
+                    status: 'PAID',
+                    dueDate: month.dueDate
+                  } as Fee))
+              )
           };
       }
     };
@@ -247,7 +376,7 @@ const YourFeePage: React.FC = () => {
       </View>
 
       <View style={styles.tabs}>
-        {(['current', 'pending', 'upcoming'] as const).map((tab) => (
+        {(['current', 'pending', 'paid'] as const).map((tab) => (
           <TouchableOpacity
             key={tab}
             style={[styles.tab, activeTab === tab && styles.activeTab]}
@@ -398,6 +527,10 @@ const styles = StyleSheet.create({
     padding: SCREEN_WIDTH * 0.02,
     borderRadius: SCREEN_WIDTH * 0.02,
     backgroundColor: COLORS.primary + '20',
+  },
+  dueDate: {
+    fontSize: 12,
+    fontWeight: '500',
   },
 });
 
